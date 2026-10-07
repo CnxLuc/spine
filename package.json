@@ -1,0 +1,23 @@
+{
+  "name": "spine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A reading layer for long-form writing: key sentences, folded asides, section notes and smarter lists, in a calm reader view.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "test": "node --test test/*.test.mjs",
+    "e2e": "node test/e2e.mjs",
+    "bridge": "node tools/claude-bridge.mjs"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "playwright": "^1.63.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@mozilla/readability": "^0.6.0"
+  }
+}

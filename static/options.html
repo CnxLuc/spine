@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spine settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <header class="masthead">
+        <img src="icons/icon-128.png" alt="" width="56" height="56" />
+        <div>
+          <h1>Spine</h1>
+          <p>A calm reading layer for long writing. Open it on any article with <kbd>⌥</kbd><kbd>⇧</kbd><kbd>S</kbd> or the toolbar button.</p>
+        </div>
+      </header>
+
+      <section class="card" id="claude">
+        <h2>Claude</h2>
+        <p class="lede">Claude reads each article once: it picks the key sentences, writes a short note for each section and a line for each fold. Spine saves the notes in this browser, so opening an article again is free.</p>
+        <div class="billing">
+          <h3>Spine uses your own Anthropic API credits</h3>
+          <p>Spine is free. Claude’s reading is billed by Anthropic to the API account your key belongs to, at Anthropic’s prices. A Claude.ai Pro or Max subscription can’t pay for it: API credits are bought separately.</p>
+          <table>
+            <tr><th>Model</th><th>Short post, 3 min</th><th>Long essay, 50 min</th></tr>
+            <tr><td>Claude Opus 5.5</td><td>about 6¢</td><td>about 62¢</td></tr>
+            <tr><td>Claude Sonnet 5.5</td><td>about 3¢</td><td>about 31¢</td></tr>
+            <tr><td>Claude Haiku 4.5</td><td>about 2¢</td><td>about 15¢</td></tr>
+          </table>
+          <p>Spine shows what each article will cost before it reads, and what it cost after.</p>
+        </div>
+        <label class="field">
+          <span>Anthropic API key</span>
+          <div class="key-row">
+            <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…" />
+            <button type="button" id="reveal" class="ghost">Show</button>
+            <button type="button" id="test" class="primary">Test</button>
+          </div>
+          <small id="test-result" class="result" role="status"></small>
+          <small id="bridge-note" class="bridge-note" hidden>Spine is reading through the local Claude bridge at <span id="bridge-address"></span>, on your Claude plan, not API credits. Its token goes in the field above.</small>
+          <small>Your key stays in this browser’s extension storage and is only sent to Anthropic.</small>
+        </label>
+        <details class="first-key">
+          <summary>First time with the Claude API?</summary>
+          <ol>
+            <li>Sign up at <a href="https://platform.claude.com/" target="_blank" rel="noopener">platform.claude.com</a>, with the same email as Claude.ai if you like. The API account is separate.</li>
+            <li>Add credit under Billing. $5 covers about 8 long essays or 80 short posts with Opus 5.5. You can set a monthly spend limit there too.</li>
+            <li>Create a key under <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener">API keys</a>, paste it above and select Test.</li>
+          </ol>
+        </details>
+        <fieldset class="models">
+          <legend>Model</legend>
+          <div id="models"></div>
+        </fieldset>
+        <label class="field inline">
+          <span>Ask before reading an article that costs more than</span>
+          <select id="askAbove">
+            <option value="0.25">25¢</option>
+            <option value="0.5">50¢</option>
+            <option value="1">$1</option>
+            <option value="2">$2</option>
+            <option value="never">Never ask</option>
+          </select>
+        </label>
+        <label class="toggle consent">
+          <input type="checkbox" id="consent" />
+          <span><b>Send the articles I open to Claude</b><small>Spine sends each article’s text to Anthropic’s API with your key, billed to your API credits, so Claude can write the notes. Nothing else leaves your browser. Turn this off and Spine asks before reading again.</small></span>
+        </label>
+      </section>
+
+      <section class="card">
+        <h2>Reading</h2>
+        <label class="field">
+          <span>Open articles in</span>
+          <div class="segmented" id="lens" role="radiogroup">
+            <button type="button" data-value="read" role="radio">Read</button>
+            <button type="button" data-value="skim" role="radio">Skim</button>
+            <button type="button" data-value="supercut" role="radio">Supercut</button>
+            <button type="button" data-value="outline" role="radio">Outline</button>
+          </div>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="autoRead" />
+          <span><b>Read with Claude as soon as Spine opens</b><small>Turn this off to choose which articles to spend API credits on.</small></span>
+        </label>
+        <label class="field inline">
+          <span>Skip pieces shorter than</span>
+          <input id="minWords" type="number" min="0" step="100" /> <em>words</em>
+        </label>
+      </section>
+
+      <section class="card">
+        <h2>Obsidian</h2>
+        <p class="lede">“Save to Obsidian” makes a new note with the article’s outline and supercut, plus its source and date.</p>
+        <div class="two">
+          <label class="field">
+            <span>Vault</span>
+            <input id="obsidianVault" type="text" placeholder="The vault that’s open" spellcheck="false" />
+          </label>
+          <label class="field">
+            <span>Folder</span>
+            <input id="obsidianFolder" type="text" placeholder="Clippings" spellcheck="false" />
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Saved notes</h2>
+        <div class="saved">
+          <p id="saved-count">Counting…</p>
+          <button type="button" id="clear" class="ghost">Clear saved notes</button>
+        </div>
+        <p class="lede small">Change the keyboard shortcut on <a href="#" id="shortcuts">the extensions shortcuts page</a>. Read <a href="https://cnxluc.github.io/spine/privacy.html" target="_blank" rel="noopener">Spine’s privacy policy</a>.</p>
+      </section>
+
+      <details class="card advanced">
+        <summary>Advanced</summary>
+        <label class="field">
+          <span>API address</span>
+          <input id="baseURL" type="url" placeholder="https://api.anthropic.com" spellcheck="false" />
+          <small>Leave empty for Anthropic. To read with your Claude plan instead of an API key, run <code>tools/install-bridge.sh</code>, put <code>http://127.0.0.1:4777</code> here and its token in the API key field.</small>
+        </label>
+      </details>
+
+      <footer>
+        <p>Reading ideas from <a href="https://tareqistyping.com/interfaces-that-think/" target="_blank" rel="noopener">Interfaces that think</a> by Tareq Ismail (MIT). Article finding by Mozilla’s Readability (Apache 2.0). Newsreader by Production Type (SIL Open Font License). Icons by Lucide (ISC).</p>
+      </footer>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

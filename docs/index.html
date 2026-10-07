@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spine — read the spine of any long article</title>
+    <meta name="description" content="A calm reader for long articles. Claude brings the key sentences forward, folds the rest, and writes a note for each section, in the author’s own voice." />
+    <meta property="og:title" content="Spine" />
+    <meta property="og:description" content="Read the spine of any long article. Key sentences come forward. Asides fold away." />
+    <meta property="og:image" content="https://cnxluc.github.io/spine/assets/promo-marquee-1400x560.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="assets/icon-128.png" />
+    <link rel="stylesheet" href="site.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="home" href="./"><img src="assets/icon-128.png" alt="" width="30" height="30" /> Spine</a>
+      <nav>
+        <a href="#install">Install</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="https://github.com/CnxLuc/spine">GitHub</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div>
+        <h1>Read the spine of any long article.</h1>
+        <p class="dek">Spine turns a long piece of writing into a calm reader and uses Claude to find the sentences that carry it. Choose how much you see: all of it, the key sentences, or a note for each section. The author’s words stay; the rest folds away, one hover from view.</p>
+        <div class="actions">
+          <a class="button primary" id="get" href="https://github.com/CnxLuc/spine/releases/latest/download/spine.zip">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /></svg>
+            <span>Download Spine</span>
+          </a>
+          <a class="button" href="#install">How to install</a>
+        </div>
+        <p class="fine" id="get-note">Free and open source, for Chrome, Arc, Brave, Edge, Dia and Aside. Claude’s reading is billed to your own Anthropic API credits: about 6¢ for a short post. <a href="#cost">What it costs</a></p>
+      </div>
+
+      <div class="demo" data-lens="read" aria-label="A demonstration of Spine’s four lenses">
+        <div class="demo-lens" role="radiogroup" aria-label="How much to show">
+          <button type="button" role="radio" data-lens="read" aria-checked="true">Read<small>2 min</small></button>
+          <button type="button" role="radio" data-lens="skim" aria-checked="false">Skim<small>1 min</small></button>
+          <button type="button" role="radio" data-lens="supercut" aria-checked="false">Supercut<small>1 min</small></button>
+          <button type="button" role="radio" data-lens="outline" aria-checked="false">Outline<small>20 s</small></button>
+        </div>
+        <div class="demo-text">
+          <h3>On reading long things</h3>
+          <div class="body">
+            <p>
+              <span class="s k">Most long essays are worth reading, and most of us never finish them.</span>
+              <span class="pill" role="button" tabindex="0">We save them for a later that never comes. <i>…</i></span>
+              <span class="s">We save them for later, and later rarely comes.</span>
+              <span class="s">The essay sits in a tab, then in a list, then nowhere.</span>
+            </p>
+            <p>
+              <span class="s k">The problem isn’t length.</span>
+              <span class="s k">A good essay is long because its argument needs room: each idea is set up, tested and joined to the next.</span>
+              <span class="s k">Summaries throw that away.</span>
+              <span class="pill" role="button" tabindex="0">They keep the end and lose the reasoning. <i>…</i></span>
+              <span class="s">They keep the conclusion and lose the reasoning that made it worth believing.</span>
+            </p>
+            <p>
+              <span class="s k">What helps is seeing the spine first.</span>
+              <span class="s k">When the sentences that carry the argument stand out, you can follow the whole piece at a glance and slow down wherever it matters to you.</span>
+              <span class="pill" role="button" tabindex="0">The rest stays, folded, one hover away. <i>…</i></span>
+              <span class="s">Everything else stays where the author put it, one hover away.</span>
+            </p>
+          </div>
+          <div class="note">Long essays go unread because summaries lose their reasoning. Seeing the key sentences first lets you follow the argument and slow down where it matters.<br /><span>…</span></div>
+        </div>
+        <p class="demo-caption" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section class="band">
+      <h2>Four ways to read</h2>
+      <p class="sub">Switch with the dock at the bottom of the page, or the keys 1 to 4. Your place never moves.</p>
+      <div class="shots">
+        <figure><img src="assets/screenshot-1-skim.jpg" alt="Skim: while scrolling, the key sentences in Machines of Loving Grace stay dark teal and the rest fades." loading="lazy" /></figure>
+        <figure><img src="assets/screenshot-2-supercut.jpg" alt="Supercut: secondary sentences folded into small grey pills, each with a short line in the author’s voice." loading="lazy" /></figure>
+        <figure><img src="assets/screenshot-3-outline.jpg" alt="Outline: each section folded under a short note." loading="lazy" /></figure>
+        <figure><img src="assets/screenshot-4-lists.jpg" alt="Lists: a dropdown above a list offers another way to group its items." loading="lazy" /></figure>
+      </div>
+    </section>
+
+    <section class="band" id="install">
+      <h2>Install Spine</h2>
+      <p class="sub">It takes about two minutes. The Claude features need an Anthropic API key, billed to your own API credits; without one, Spine is still a calm reader view.</p>
+      <div class="cols">
+        <div class="card">
+          <h3>1. Add it to your browser</h3>
+          <ol>
+            <li><a href="https://github.com/CnxLuc/spine/releases/latest/download/spine.zip">Download Spine</a> and double-click the file to unzip it.</li>
+            <li>Type <code>chrome://extensions</code> in the address bar and turn on Developer mode, top right.</li>
+            <li>Select Load unpacked and choose the unzipped <code>spine</code> folder. Keep the folder: your browser loads Spine from it.</li>
+          </ol>
+        </div>
+        <div class="card">
+          <h3>2. Add your API key</h3>
+          <ol>
+            <li>Sign up at <a href="https://platform.claude.com/">platform.claude.com</a>. The API account is separate from Claude.ai: a Pro or Max subscription can’t pay for Spine.</li>
+            <li>Add credit under Billing. $5 covers about 8 long essays or 80 short posts.</li>
+            <li>Create a key under API keys and paste it in Spine’s settings, which open when you install it.</li>
+          </ol>
+        </div>
+        <div class="card">
+          <h3>3. Read</h3>
+          <p>Open any article and press <kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>S</kbd> on a Mac, or <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>S</kbd> on Windows, or select Spine’s toolbar button.</p>
+          <p>Claude reads the piece once, in 15 to 60 seconds, and Spine saves the notes, so reading it again is free.</p>
+          <p>Press <kbd>?</kbd> in Spine for every shortcut.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="band" id="cost">
+      <h2>What it costs</h2>
+      <p class="sub">Spine is free. Claude’s reading is billed by Anthropic to your own API credits, once per article: Spine saves the notes, so reading an article again costs nothing.</p>
+      <div class="cost">
+        <table>
+          <thead><tr><th>Model</th><th>Short post, 3 minutes</th><th>Long essay, 50 minutes</th></tr></thead>
+          <tbody>
+            <tr><td>Claude Opus 5.5, the default</td><td>about 6¢</td><td>about 62¢</td></tr>
+            <tr><td>Claude Sonnet 5.5</td><td>about 3¢</td><td>about 31¢</td></tr>
+            <tr><td>Claude Haiku 4.5</td><td>about 2¢</td><td>about 15¢</td></tr>
+          </tbody>
+        </table>
+        <ul>
+          <li>Spine shows what an article will cost before it reads, and what it cost after.</li>
+          <li>It asks first before reading anything over $1. Change the limit in settings.</li>
+          <li>Settings show what you’ve spent so far. You can also set a monthly limit on your Anthropic account.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="band">
+      <h2>Your reading stays yours</h2>
+      <div class="cols">
+        <div class="card">
+          <h3>No servers</h3>
+          <p>Spine has no servers, analytics or tracking. Your key, your notes and your settings stay in your browser.</p>
+        </div>
+        <div class="card">
+          <h3>Straight to Anthropic</h3>
+          <p>When you agree, Spine sends the text of the articles you open straight to Anthropic, using your key, and nothing else.</p>
+        </div>
+        <div class="card">
+          <h3>Your call</h3>
+          <p>Turn it off any time in Spine’s settings. Read the <a href="privacy.html">privacy policy</a>.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="credits">
+      <p>Spine’s reading ideas come from Tareq Ismail’s <a href="https://github.com/onepixelaway/interfaces-that-think/tree/main/reading-long-form">Reading Long Form</a>, episode 2 of <a href="https://tareqistyping.com/interfaces-that-think/">Interfaces that think</a>. Spine is open source under the MIT licence. Set in Newsreader by Production Type.</p>
+    </footer>
+
+    <script>
+      // The demo: the same few sentences, four ways. It plays through once on
+      // its own; touching it hands control to the reader.
+      const demo = document.querySelector('.demo');
+      const caption = demo.querySelector('.demo-caption');
+      const words = {
+        read: 'Read: everything, as the author wrote it.',
+        skim: 'Skim: while you scroll, the key sentences stay and the rest fades.',
+        supercut: 'Supercut: the rest folds into pills, each with a line in the author’s voice. Rest on one to open it.',
+        outline: 'Outline: each section folds under a short note.',
+      };
+      const order = Object.keys(words);
+      let playing = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let timer;
+      const show = lens => {
+        demo.dataset.lens = lens;
+        for (const button of demo.querySelectorAll('.demo-lens button')) {
+          button.setAttribute('aria-checked', String(button.dataset.lens === lens));
+        }
+        for (const open of demo.querySelectorAll('.open')) open.classList.remove('open');
+        caption.textContent = words[lens];
+      };
+      const next = () => {
+        if (!playing) return;
+        const at = order.indexOf(demo.dataset.lens);
+        if (at === order.length - 1) {
+          playing = false;
+          return;
+        }
+        show(order[at + 1]);
+        timer = setTimeout(next, 3400);
+      };
+      const stop = () => {
+        playing = false;
+        clearTimeout(timer);
+      };
+      demo.querySelector('.demo-lens').addEventListener('click', event => {
+        const lens = event.target.closest('button')?.dataset.lens;
+        if (!lens) return;
+        stop();
+        show(lens);
+      });
+      // A pill opens what it folds: the sentence right after it.
+      const open = pill => {
+        stop();
+        pill.classList.add('open');
+        pill.nextElementSibling?.classList.add('open');
+      };
+      for (const pill of demo.querySelectorAll('.pill')) {
+        pill.addEventListener('mouseenter', () => open(pill));
+        pill.addEventListener('click', () => open(pill));
+        pill.addEventListener('keydown', event => (event.key === 'Enter' || event.key === ' ') && open(pill));
+      }
+      show('read');
+      // Start when the demo comes into view.
+      new IntersectionObserver((entries, observer) => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          observer.disconnect();
+          if (playing) timer = setTimeout(next, 1800);
+        }
+      }).observe(demo);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,2018 @@
+/* Spine's reading layer. Everything lives in a shadow root, so the page's styles
+   never reach in and these never leak out. Colors, type and timings are tokens
+   on .spine, set per theme. The reading ideas' colors and fade times follow
+   Tareq Ismail's Reading Long Form. */
+
+:host {
+  all: initial;
+}
+
+.spine {
+  /* Paper: the warm ivory of the original essay site. */
+  --bg: #f0eee6;
+  --surface: #f7f6f1;
+  --raised: #fdfcf9;
+  --ink: #1f1e1d;
+  --ink-2: #5e5d59;
+  --ink-3: #8b8982;
+  --ink-4: #b9b6ad;
+  --line: #dcd9cf;
+  --accent: #2e637a;
+  --note: #f8f7f3;
+  --chip: color-mix(in srgb, var(--ink) 6%, transparent);
+  --chip-2: color-mix(in srgb, var(--ink) 10%, transparent);
+  --shadow: rgb(31 30 29 / 0.13);
+  --shadow-soft: rgb(31 30 29 / 0.07);
+  --selection: color-mix(in srgb, var(--accent) 22%, transparent);
+  --glass: color-mix(in srgb, var(--bg) 78%, transparent);
+
+  --font-text: 'Spine Newsreader', Newsreader, Charter, 'Iowan Old Style', Georgia, serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  --size: 20px;
+  --scale: 1;
+  --leading: 1.62;
+  --measure: 33em;
+
+  /* The reading ideas' timings, from Reading Long Form. */
+  --skim: 25%;
+  --fade-out: 0.5s;
+  --fade-hold: 1.5s;
+  --fade-in: 0.5s;
+  --to-skim: 0.3s;
+  --key-to-read: 2.5s;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  color-scheme: light;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.spine[data-theme='white'] {
+  --bg: #ffffff;
+  --surface: #f6f6f4;
+  --raised: #ffffff;
+  --ink: #1b1b1a;
+  --ink-2: #57564f;
+  --ink-3: #8c8b84;
+  --ink-4: #c2c1ba;
+  --line: #e5e4df;
+  --accent: #2b6178;
+  --note: #f6f6f3;
+}
+.spine[data-theme='sepia'] {
+  --bg: #f4ead6;
+  --surface: #f8f0df;
+  --raised: #fbf6eb;
+  --ink: #3a2d20;
+  --ink-2: #6c5a45;
+  --ink-3: #9b876f;
+  --ink-4: #c8b79c;
+  --line: #e2d3b7;
+  --accent: #8a4b21;
+  --note: #f9f1e2;
+  --shadow: rgb(58 45 32 / 0.16);
+  --shadow-soft: rgb(58 45 32 / 0.08);
+}
+.spine[data-theme='dusk'] {
+  --bg: #1f1e1d;
+  --surface: #282725;
+  --raised: #302f2c;
+  --ink: #efede5;
+  --ink-2: #b0aea5;
+  --ink-3: #807e77;
+  --ink-4: #57554f;
+  --line: #3a3936;
+  --accent: #add6e8;
+  --note: #292826;
+  --shadow: rgb(0 0 0 / 0.5);
+  --shadow-soft: rgb(0 0 0 / 0.3);
+  color-scheme: dark;
+}
+.spine[data-theme='night'] {
+  --bg: #000000;
+  --surface: #121212;
+  --raised: #1a1a1a;
+  --ink: #dbd9d2;
+  --ink-2: #9b9991;
+  --ink-3: #6c6a64;
+  --ink-4: #45443f;
+  --line: #262624;
+  --accent: #8fc3db;
+  --note: #111111;
+  --shadow: rgb(0 0 0 / 0.7);
+  --shadow-soft: rgb(0 0 0 / 0.4);
+  color-scheme: dark;
+}
+
+.spine[data-font='charter'] {
+  --font-text: Charter, 'Bitstream Charter', 'Iowan Old Style', Georgia, serif;
+  --scale: 0.94;
+}
+.spine[data-font='sans'] {
+  --font-text: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, 'Helvetica Neue', system-ui, sans-serif;
+  --scale: 0.9;
+}
+.spine[data-width='narrow'] {
+  --measure: 29em;
+}
+.spine[data-width='wide'] {
+  --measure: 38em;
+}
+.spine[data-leading='compact'] {
+  --leading: 1.5;
+}
+.spine[data-leading='airy'] {
+  --leading: 1.78;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: var(--selection);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+svg.icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+
+/* The layer: a sheet of paper that comes up over the page. */
+.backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  transition: background-color 0.35s ease;
+}
+.spine {
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.spine.shown {
+  opacity: 1;
+}
+.spine .scroller .doc {
+  transform: translateY(14px);
+  transition: transform 0.45s var(--ease);
+}
+.spine.shown .scroller .doc {
+  transform: none;
+}
+
+.scroller {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scroll-padding-top: 88px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-4) transparent;
+  outline: none;
+}
+.scroller:focus {
+  outline: none;
+}
+
+/* Reading progress, a hairline at the very top. */
+.progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 6;
+  pointer-events: none;
+}
+.progress i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--accent);
+  opacity: 0.75;
+  transform-origin: 0 50%;
+  transform: scaleX(var(--read, 0));
+}
+
+/* The top bar: the site on the left, tools on the right. It slides away while
+   you read down and comes back when you scroll up or reach for it. */
+.bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px 0 18px;
+  background: var(--glass);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  border-bottom: 1px solid transparent;
+  transition:
+    transform 0.32s var(--ease),
+    border-color 0.3s ease,
+    background-color 0.35s ease;
+}
+.spine.scrolled .bar {
+  border-bottom-color: color-mix(in srgb, var(--line) 70%, transparent);
+}
+.spine.bar-away .bar {
+  transform: translateY(-100%);
+}
+.bar-left,
+.bar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.bar-left {
+  flex: 1;
+  gap: 10px;
+}
+.bar-site {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  height: 32px;
+  flex: 1;
+}
+.bar-site img {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  flex: none;
+}
+.bar-name,
+.bar-title {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s var(--ease);
+}
+.bar-name {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+.bar-title {
+  position: absolute;
+  left: 25px;
+  right: 0;
+  color: var(--ink);
+  font-weight: 500;
+  opacity: 0;
+  transform: translateY(6px);
+}
+.spine.past-title .bar-name {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+.spine.past-title .bar-title {
+  opacity: 1;
+  transform: none;
+}
+.bar-meter {
+  font-size: 12px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  margin-right: 8px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.spine.scrolled .bar-meter {
+  opacity: 1;
+}
+
+.tool {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0 8px;
+  border-radius: 9px;
+  color: var(--ink-2);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.tool:hover,
+.tool[aria-expanded='true'] {
+  background: var(--chip);
+  color: var(--ink);
+}
+.tool .aa {
+  font-family: var(--font-text);
+  font-size: 17px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+.tool .aa small {
+  font-size: 13px;
+}
+.tool-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+.close {
+  margin-left: 4px;
+}
+
+/* The intelligence button carries the state of the notes: a quiet spark when
+   ready, a slow pulse while Claude reads. */
+.spark-state {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+}
+.spine[data-ai='reading'] .spark-state,
+.spine[data-ai='bridging'] .spark-state {
+  background: var(--accent);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.spine[data-ai='error'] .spark-state {
+  background: #c2410c;
+}
+.spine[data-ai='no-key'] .spark-state {
+  background: var(--ink-4);
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+    transform: scale(0.7);
+  }
+}
+
+/* The article. */
+.doc {
+  width: min(var(--measure), 100% - 40px);
+  margin: 0 auto;
+  padding: 120px 0 200px;
+  font-family: var(--font-text);
+  font-size: calc(var(--size) * var(--scale));
+  line-height: var(--leading);
+  color: var(--ink);
+  font-optical-sizing: auto;
+  font-kerning: normal;
+  hanging-punctuation: first;
+  overflow-wrap: break-word;
+}
+.doc-head {
+  margin-bottom: 3.1em;
+}
+.kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 22px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.kicker .favicon {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+.doc-title {
+  margin: 0;
+  font-size: 2.45em;
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+.doc-dek {
+  margin: 0.7em 0 0;
+  font-size: 1.12em;
+  line-height: 1.45;
+  font-style: italic;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.doc-byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin: 1.6em 0 0;
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.doc-byline .author {
+  color: var(--ink);
+  font-weight: 500;
+}
+.doc-byline .sep {
+  color: var(--ink-4);
+}
+.doc-byline .read-time {
+  font-variant-numeric: tabular-nums;
+}
+.doc-byline .gist-time {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.doc-body p,
+.doc-body ul,
+.doc-body ol,
+.doc-body blockquote,
+.doc-body pre,
+.doc-body .table-wrap {
+  margin: 0 0 1.05em;
+}
+.doc-body p {
+  text-wrap: pretty;
+}
+/* Notes and references, after the piece. */
+.back-matter {
+  font-size: 0.82em;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.back-matter .sec-title {
+  font-size: 1.3em;
+  color: var(--ink);
+}
+.back-matter li::marker {
+  font-variant-numeric: tabular-nums;
+}
+.doc h2,
+.doc h3,
+.doc h4 {
+  font-weight: 600;
+  line-height: 1.22;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.doc h2 {
+  font-size: 1.5em;
+  margin: 2.1em 0 0.65em;
+}
+.doc h3 {
+  font-size: 1.22em;
+  margin: 1.8em 0 0.55em;
+}
+.doc h4 {
+  font-size: 1em;
+  margin: 1.6em 0 0.4em;
+}
+.sec:first-child > .sec-title {
+  margin-top: 0.4em;
+}
+.doc a {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s ease;
+}
+.doc a:hover {
+  text-decoration-color: currentColor;
+}
+.doc strong {
+  font-weight: 600;
+}
+.doc ul,
+.doc ol {
+  padding-left: 1.35em;
+}
+.doc li {
+  margin-bottom: 0.45em;
+  padding-left: 0.15em;
+}
+.doc li::marker {
+  color: var(--ink-3);
+}
+.doc li > ul,
+.doc li > ol {
+  margin: 0.45em 0 0;
+}
+.doc blockquote {
+  margin-left: 0;
+  margin-right: 0;
+  padding: 0.1em 0 0.1em 1.1em;
+  border-left: 2px solid var(--line);
+  color: var(--ink-2);
+}
+.doc blockquote p:last-child {
+  margin-bottom: 0;
+}
+.doc code {
+  font-family: var(--font-mono);
+  font-size: 0.84em;
+  padding: 0.12em 0.36em;
+  border-radius: 5px;
+  background: var(--chip);
+}
+.doc pre {
+  padding: 16px 18px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  overflow-x: auto;
+  font-size: 0.74em;
+  line-height: 1.6;
+  tab-size: 2;
+}
+.doc pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+.doc sup,
+.doc sub {
+  line-height: 0;
+  font-size: 0.72em;
+}
+.doc sup.fn a {
+  font-family: var(--font-ui);
+  font-size: 0.82em;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--chip);
+  color: var(--ink-2);
+}
+.doc mark {
+  background: color-mix(in srgb, #f6d365 55%, transparent);
+  color: inherit;
+  border-radius: 2px;
+}
+.doc hr {
+  border: 0;
+  margin: 2.2em 0;
+  text-align: center;
+  height: auto;
+}
+.doc hr::after {
+  content: '⁂';
+  color: var(--ink-3);
+  font-size: 1.1em;
+}
+.doc .dd {
+  padding-left: 1.2em;
+}
+.doc .table-wrap {
+  overflow-x: auto;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.doc table {
+  border-collapse: collapse;
+  min-width: 100%;
+}
+.doc caption {
+  caption-side: bottom;
+  padding-top: 8px;
+  color: var(--ink-3);
+  font-size: 13px;
+  text-align: left;
+}
+.doc th,
+.doc td {
+  padding: 8px 12px 8px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.doc th {
+  font-weight: 600;
+  color: var(--ink);
+}
+.doc .inline-img {
+  height: 1.1em;
+  width: auto;
+  vertical-align: -0.15em;
+}
+
+/* Figures: images at their own size, up to the column; wide ones break out a
+   little. A click opens them full screen. */
+.doc figure {
+  margin: 2em 0;
+}
+.doc figure img,
+.doc figure video {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  max-height: 82vh;
+  margin: 0 auto;
+  border-radius: 6px;
+  background: var(--chip);
+  object-fit: contain;
+}
+.doc figure img {
+  cursor: zoom-in;
+}
+.doc figure img[data-loaded] {
+  background: none;
+}
+.doc figure.wide {
+  --breakout: min(880px, 100vw - 48px);
+  width: var(--breakout);
+  margin-left: calc((100% - var(--breakout)) / 2);
+}
+.doc figure.wide img {
+  width: 100%;
+}
+.doc figcaption {
+  margin-top: 0.75em;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  text-align: center;
+  text-wrap: balance;
+}
+.doc figure.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+.doc figure.gallery figcaption {
+  grid-column: 1 / -1;
+}
+.doc .embed-link {
+  position: relative;
+  display: block;
+  border-radius: 10px;
+  overflow: hidden;
+  text-decoration: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.doc .embed-link img {
+  border-radius: 0;
+  width: 100%;
+  max-height: 60vh;
+  object-fit: cover;
+  cursor: pointer;
+}
+.doc .embed-label {
+  display: block;
+  padding: 12px 16px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.doc-foot {
+  margin-top: 4em;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-3);
+  text-align: center;
+}
+.doc-foot .end-mark {
+  font-family: var(--font-text);
+  font-size: 20px;
+  margin-bottom: 1.4em;
+  color: var(--ink-3);
+}
+.doc-foot p {
+  margin: 0.2em 0;
+}
+.doc-foot a {
+  color: var(--ink-2);
+}
+
+/* Skim. While you scroll, everything but the key sentences fades to a quarter
+   and the key sentences take the accent color; once scrolling rests, the text
+   holds a moment, then everything eases back. Hold ⌥ to see it without
+   scrolling. */
+.spine.has-keys.fades .tb {
+  transition: color var(--fade-in) ease var(--fade-hold);
+}
+.spine.has-keys.skimming .tb {
+  color: color-mix(in srgb, var(--ink) var(--skim), transparent);
+  transition: color var(--fade-out) ease;
+}
+/* Key sentences never fade, so they always carry their own color. */
+.spine.has-keys .tb :is(.k, .lead) {
+  color: var(--ink);
+}
+.spine.has-keys.emphasis .tb :is(.k, .lead) {
+  transition: color var(--key-to-read) ease-in-out;
+}
+.spine.has-keys.emphasis.skimming .tb :is(.k, .lead) {
+  color: var(--accent);
+  transition: color var(--to-skim) ease;
+}
+.spine.has-keys.skimming .tb a:has(.k) {
+  text-decoration-color: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+/* Changing theme or type shouldn't wait on the reading fades. */
+.spine.restyling *,
+.spine.restyling *::before,
+.spine.restyling *::after {
+  transition: none !important;
+}
+
+/* While Claude reads, each key sentence glows once as it's chosen. */
+.spine.live .tb .k.fresh {
+  animation: chosen 1.6s ease-out;
+}
+@keyframes chosen {
+  0% {
+    background: color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+  18% {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+  }
+  100% {
+    background: color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+
+/* Supercut. Everything but the key sentences folds into a small pill; a short
+   line in the author's voice can sit inside it, set exactly like the text.
+   Resting on a pill opens it in place. */
+.pill {
+  display: none;
+}
+.spine[data-lens='supercut'] :is(.h, .hb):not(.open) {
+  display: none;
+}
+.spine[data-lens='supercut'] .pill {
+  position: relative;
+  display: inline;
+  padding: 0.22em 0.32em 0.1em;
+  border-radius: 0.42em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  background: var(--chip);
+  color: var(--ink-2);
+  font-style: normal;
+  font-weight: normal;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.spine[data-lens='supercut'] .pill::before {
+  content: '';
+  position: absolute;
+  inset: -0.55em -0.6em;
+}
+.spine[data-lens='supercut'] .pill:hover {
+  background: var(--chip-2);
+}
+.spine[data-lens='supercut'] .pill .dots {
+  position: relative;
+  top: -0.27em;
+  letter-spacing: 0.05em;
+}
+.spine[data-lens='supercut'] .pill .bridge {
+  margin-right: 0.28em;
+  color: var(--ink);
+}
+.spine[data-lens='supercut'] .pill .bridge.fresh {
+  animation: bridge-in 0.9s ease-out;
+}
+@keyframes bridge-in {
+  from {
+    opacity: 0;
+  }
+}
+.spine[data-lens='supercut'] .pill.open {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  padding: 0;
+}
+.spine[data-lens='supercut'] .h.open {
+  padding: 0.22em 0 0.1em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  background: var(--chip);
+}
+.spine[data-lens='supercut'] .hb.open {
+  margin-inline: -0.32em;
+  padding: 0.1em 0.32em;
+  border-radius: 0.42em;
+  background: var(--chip);
+}
+/* A paragraph folded whole is just its pill: it sits close to its neighbours. */
+.spine[data-lens='supercut'] p.whole:not(:has(.open)) {
+  margin-top: -0.35em;
+  margin-bottom: 0.7em;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .spine[data-lens='supercut'] :is(.h, .hb).open {
+    animation: reveal 0.22s ease-out;
+  }
+}
+@keyframes reveal {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Outline. Each long section folds under a short note in the author's voice.
+   The section's opening shows faded behind it; a click opens the section. */
+.callout {
+  display: none;
+}
+.sec-title.synthetic {
+  display: none;
+}
+.spine[data-lens='outline'] .sec-title.synthetic {
+  display: block;
+}
+.sec-title.synthetic::before {
+  content: '';
+}
+.spine[data-lens='outline'] .sec.foldable:not(.open) .sec-fold {
+  display: grid;
+  cursor: pointer;
+}
+.spine[data-lens='outline'] .sec.foldable:not(.open) .sec-fold > * {
+  grid-area: 1 / 1;
+}
+.spine[data-lens='outline'] .sec.foldable:not(.open) .sec-body {
+  /* Only the line or two above the note shows, fading into it. */
+  max-height: calc(var(--fold-top, 64px) + 20px);
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  -webkit-mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.6) 0, rgb(0 0 0 / 0.6) calc(var(--fold-top, 64px) - 30px), transparent calc(var(--fold-top, 64px) + 6px));
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.6) 0, rgb(0 0 0 / 0.6) calc(var(--fold-top, 64px) - 30px), transparent calc(var(--fold-top, 64px) + 6px));
+}
+.spine[data-lens='outline'] .sec.foldable:not(.open) .tb,
+.spine[data-lens='outline'] .sec.foldable:not(.open) .tb :is(.k, .lead) {
+  color: var(--ink) !important;
+  transition: none !important;
+  animation: none !important;
+}
+.spine[data-lens='outline'] .sec.foldable:not(.open) .callout {
+  display: block;
+  z-index: 1;
+  align-self: start;
+  justify-self: stretch;
+  margin: var(--fold-top, 64px) -26px 8px;
+  padding: 24px 26px 20px;
+  border-radius: 14px;
+  background: var(--note);
+  box-shadow:
+    0 1px 2px var(--shadow-soft),
+    0 0 0 1px color-mix(in srgb, var(--line) 55%, transparent);
+  cursor: pointer;
+  animation: note-in 0.4s var(--ease);
+}
+@keyframes note-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.callout-text {
+  margin: 0 0 14px;
+  font-size: 0.92em;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+.callout-more {
+  margin: 0;
+  line-height: 1;
+}
+.callout-pill {
+  display: inline-block;
+  padding: 0.24em 0.5em 0.1em;
+  border-radius: 0.42em;
+  background: var(--chip);
+  color: var(--ink-2);
+  font-size: 0.92em;
+  letter-spacing: 0.05em;
+  transition: background-color 0.15s ease;
+}
+.callout-pill .dots {
+  position: relative;
+  top: -0.27em;
+}
+.sec-fold:hover .callout-pill,
+.callout:focus-visible .callout-pill {
+  background: var(--chip-2);
+}
+.spine[data-lens='outline'] .sec.foldable:not(.open) + .sec .sec-title {
+  margin-top: 1.2em;
+}
+
+/* Notes and references fold to their heading in the outline; a click opens them. */
+.spine[data-lens='outline'] .back-matter:not(.open) .sec-fold {
+  display: none;
+}
+.spine[data-lens='outline'] .back-matter:not(.open) .sec-title {
+  cursor: pointer;
+}
+.spine[data-lens='outline'] .back-matter:not(.open) .sec-title::after {
+  content: '…';
+  display: inline-block;
+  margin-left: 0.4em;
+  padding: 0 0.42em 0.18em;
+  border-radius: 0.42em;
+  background: var(--chip);
+  color: var(--ink-2);
+  font-size: 0.7em;
+  font-weight: 400;
+  line-height: 1.3;
+  vertical-align: 0.2em;
+}
+
+/* Lists, grouped another way: a sentence above the list ends in a dropdown,
+   which stacks every grouping around the chosen one when you rest on it. */
+.regroup {
+  margin: 0 0 0.9em;
+  color: var(--ink-2);
+}
+.regroup-end {
+  white-space: nowrap;
+}
+.regroup-picker {
+  position: relative;
+  display: inline-block;
+  margin-left: 0.1em;
+}
+.regroup-trigger,
+.regroup-option {
+  padding: 0.12em 0.5em 0.06em 0.55em;
+  border-radius: 0.45em;
+  line-height: 1.3;
+  white-space: nowrap;
+  font-family: var(--font-text);
+  font-size: 1em;
+}
+.regroup-trigger {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+  background: var(--chip);
+  color: var(--ink);
+}
+.regroup-trigger:hover,
+.regroup-trigger[aria-expanded='true'] {
+  background: var(--chip-2);
+}
+.regroup-trigger svg {
+  align-self: center;
+  width: 0.7em;
+  height: 0.7em;
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.regroup-menu {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 0.6em;
+  background: color-mix(in srgb, var(--ink) 5%, var(--bg));
+  box-shadow:
+    0 12px 32px var(--shadow),
+    0 0 0 1px var(--line);
+}
+.regroup-menu[hidden] {
+  display: none;
+}
+.regroup-option {
+  display: block;
+  margin: 0;
+  color: var(--ink-2);
+  text-align: left;
+}
+.regroup-option:hover,
+.regroup-option:focus-visible {
+  background: var(--chip);
+  color: var(--ink);
+}
+.regroup-option[aria-checked='true'] {
+  background: var(--raised);
+  box-shadow:
+    0 1px 2px var(--shadow),
+    0 0 0 0.5px var(--chip-2);
+  color: var(--ink);
+}
+.regroup-away,
+.carousel-away {
+  display: none !important;
+}
+.regrouped {
+  margin: 0 0 1em;
+}
+.regroup-heading {
+  margin: 0.8em 0 0.3em !important;
+  font-size: inherit !important;
+  font-weight: 400 !important;
+  line-height: inherit !important;
+  letter-spacing: 0 !important;
+}
+.regroup-heading:first-child {
+  margin-top: 0 !important;
+}
+.regrouped ul,
+.regrouped ol {
+  margin-bottom: 0;
+}
+.regroup-edit {
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, var(--ink-2) 70%, transparent);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.2em;
+}
+
+/* Lists as cards you slide through, a card and a half at a time. */
+.carousel {
+  margin: 0 0 1.1em;
+}
+.doc .carousel-track {
+  display: flex;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  border-radius: 14px;
+}
+.carousel-track::-webkit-scrollbar {
+  display: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .carousel-track {
+    scroll-behavior: smooth;
+  }
+}
+.doc .carousel-card {
+  flex: 0 0 calc((100% - 12px) / 1.5);
+  margin: 0;
+  padding: 20px 22px 22px;
+  border-radius: 14px;
+  background: var(--note);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--line) 55%, transparent);
+  font-size: 0.9em;
+  line-height: 1.5;
+  scroll-snap-align: start;
+}
+.doc .carousel-card::marker {
+  content: '';
+}
+.carousel-icon {
+  display: block;
+  margin-bottom: 12px;
+  line-height: 0;
+}
+.carousel-icon svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.carousel-nav {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 8px;
+}
+.carousel-nav button {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-2);
+  background: var(--chip);
+}
+.carousel-nav button:hover {
+  background: var(--chip-2);
+  color: var(--ink);
+}
+.carousel-nav button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.carousel-nav svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* The outline beside the text, on wide screens. */
+.rail {
+  position: absolute;
+  top: 120px;
+  left: 28px;
+  z-index: 3;
+  width: min(220px, calc((100vw - var(--measure-px, 680px)) / 2 - 60px));
+  max-height: calc(100vh - 240px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  opacity: 0.55;
+  transition: opacity 0.3s ease;
+}
+.rail:hover,
+.rail:focus-within {
+  opacity: 1;
+}
+.spine.scrolling .rail {
+  opacity: 0.35;
+}
+.rail[hidden] {
+  display: none;
+}
+.rail ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.rail li {
+  margin: 0;
+}
+.rail a {
+  position: relative;
+  display: block;
+  padding: 5px 0 5px 14px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--ink-3);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+.rail a::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--line);
+}
+.rail a::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  transform-origin: 50% 0;
+  transform: scaleY(var(--done, 0));
+  transition: transform 0.2s linear;
+}
+.rail a:hover {
+  color: var(--ink);
+}
+.rail a.current {
+  color: var(--ink);
+  font-weight: 500;
+}
+.rail a.title {
+  font-weight: 600;
+  color: var(--ink-2);
+  margin-bottom: 6px;
+}
+.rail a.title::before,
+.rail a.title::after {
+  display: none;
+}
+.rail .synthetic-mark {
+  color: var(--accent);
+  margin-right: 4px;
+  font-size: 10px;
+}
+.rail-note {
+  position: absolute;
+  z-index: 7;
+  width: 300px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--raised);
+  box-shadow:
+    0 12px 40px var(--shadow),
+    0 0 0 1px color-mix(in srgb, var(--line) 70%, transparent);
+  font-family: var(--font-text);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+.rail-note.shown {
+  opacity: 1;
+  transform: none;
+}
+.rail-note b {
+  display: block;
+  margin-bottom: 6px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* The dock: how much of the text you see, from all of it to an outline. */
+.dock {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+  transition:
+    transform 0.35s var(--ease),
+    opacity 0.3s ease;
+}
+.spine.dock-away .dock {
+  transform: translate(-50%, calc(100% + 30px));
+  opacity: 0;
+}
+.lens {
+  position: relative;
+  display: flex;
+  padding: 4px;
+  border-radius: 16px;
+  background: var(--glass);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow:
+    0 10px 34px var(--shadow),
+    0 0 0 1px color-mix(in srgb, var(--line) 75%, transparent);
+}
+.lens-thumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  width: 0;
+  border-radius: 12px;
+  background: var(--raised);
+  box-shadow:
+    0 1px 3px var(--shadow),
+    0 0 0 0.5px var(--chip-2);
+  transition:
+    transform 0.38s var(--ease),
+    width 0.38s var(--ease);
+}
+.spine[data-theme='dusk'] .lens-thumb,
+.spine[data-theme='night'] .lens-thumb {
+  background: color-mix(in srgb, var(--ink) 14%, var(--bg));
+}
+.lens button {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 84px;
+  padding: 7px 14px 6px;
+  border-radius: 12px;
+  color: var(--ink-2);
+  transition: color 0.2s ease;
+}
+.lens button:hover {
+  color: var(--ink);
+}
+.lens button[aria-checked='true'] {
+  color: var(--ink);
+}
+.lens b {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+}
+.lens small {
+  font-size: 11px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  min-height: 14px;
+}
+.lens button[aria-checked='true'] small {
+  color: var(--accent);
+}
+.lens button.waiting small {
+  position: relative;
+  color: transparent;
+}
+.lens button.waiting small::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 26px;
+  height: 3px;
+  margin: -1.5px 0 0 -13px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--chip) 0%, var(--ink-4) 50%, var(--chip) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.3s linear infinite;
+}
+.lens button.unavailable {
+  color: var(--ink-4);
+}
+.lens button.unavailable small {
+  color: var(--ink-4);
+}
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow:
+    0 6px 20px var(--shadow-soft),
+    0 0 0 1px color-mix(in srgb, var(--line) 70%, transparent);
+  font-size: 12.5px;
+  color: var(--ink-2);
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s var(--ease);
+}
+.status[hidden] {
+  display: none;
+}
+.status.leaving {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.status .spark {
+  color: var(--accent);
+  display: inline-flex;
+}
+.status .spark svg {
+  width: 14px;
+  height: 14px;
+}
+.spine:is([data-ai='reading'], [data-ai='bridging']) .status .spark svg {
+  animation: twinkle 1.6s ease-in-out infinite;
+}
+@keyframes twinkle {
+  50% {
+    transform: rotate(20deg) scale(0.85);
+    opacity: 0.6;
+  }
+}
+.status .meter {
+  width: 64px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--chip-2);
+  overflow: hidden;
+}
+.status .meter i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--accent);
+  transform-origin: 0 50%;
+  transform: scaleX(var(--p, 0));
+  transition: transform 0.4s ease;
+}
+.status .cost {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+.status button {
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-4);
+  text-underline-offset: 2px;
+}
+
+.status.ask {
+  padding: 8px 8px 8px 16px;
+  color: var(--ink);
+  box-shadow:
+    0 10px 30px var(--shadow),
+    0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.status.ask button {
+  flex: none;
+  padding: 6px 11px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 600;
+  background: var(--chip);
+}
+.status.ask button.yes {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+/* Panels that drop from the top bar. */
+.panel {
+  position: absolute;
+  top: 60px;
+  right: 14px;
+  z-index: 8;
+  width: 320px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--raised);
+  box-shadow:
+    0 18px 50px var(--shadow),
+    0 0 0 1px color-mix(in srgb, var(--line) 80%, transparent);
+  color: var(--ink);
+  transform-origin: top right;
+  animation: panel-in 0.2s var(--ease);
+}
+.panel[hidden] {
+  display: none;
+}
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+.panel h3 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.panel section + section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+.themes {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+.swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.swatch span.chip {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  font-family: 'Spine Newsreader', Georgia, serif;
+  font-size: 16px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 14%, transparent);
+  transition: box-shadow 0.15s ease;
+}
+.swatch.auto span.chip {
+  color: #fff !important;
+}
+.swatch.auto span.chip span {
+  mix-blend-mode: difference;
+}
+.swatch[aria-checked='true'] span.chip {
+  box-shadow:
+    0 0 0 2px var(--raised),
+    0 0 0 4px var(--accent);
+}
+.swatch[aria-checked='true'] {
+  color: var(--ink);
+}
+.segmented {
+  display: flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--chip);
+}
+.segmented button {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.segmented button[aria-checked='true'] {
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow: 0 1px 2px var(--shadow);
+}
+.spine:is([data-theme='dusk'], [data-theme='night']) .segmented button[aria-checked='true'] {
+  background: color-mix(in srgb, var(--ink) 14%, var(--raised));
+}
+.font-choice button {
+  font-size: 14px;
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stepper button {
+  width: 36px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--chip);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Spine Newsreader', Georgia, serif;
+}
+.stepper button:hover {
+  background: var(--chip-2);
+}
+.stepper output {
+  flex: 1;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.row + .row {
+  margin-top: 10px;
+}
+.row > span {
+  width: 64px;
+  flex: none;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.row > :last-child {
+  flex: 1;
+}
+
+.switch-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 2px;
+  cursor: pointer;
+}
+.switch-row + .switch-row {
+  border-top: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+}
+.switch-row .what {
+  font-size: 13px;
+  line-height: 1.35;
+}
+.switch-row .what small {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 999px;
+  background: var(--chip-2);
+  transition: background-color 0.2s ease;
+}
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+  transition: transform 0.2s var(--ease);
+}
+.switch[aria-checked='true'] {
+  background: var(--accent);
+}
+.switch[aria-checked='true']::after {
+  transform: translateX(14px);
+}
+.spine:is([data-theme='dusk'], [data-theme='night']) .switch[aria-checked='true']::after {
+  background: var(--bg);
+}
+
+.ai-state {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 2px 0 4px;
+}
+.ai-state .glyph {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+.ai-state p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.ai-state p strong {
+  display: block;
+  color: var(--ink);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--chip);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  transition: background-color 0.15s ease;
+}
+.button:hover {
+  background: var(--chip-2);
+}
+.button.primary {
+  background: var(--ink);
+  color: var(--bg);
+}
+.button.primary:hover {
+  background: color-mix(in srgb, var(--ink) 86%, var(--bg));
+}
+.button svg {
+  width: 15px;
+  height: 15px;
+}
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: -6px;
+}
+.menu button,
+.menu a {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  color: var(--ink);
+  text-decoration: none;
+  text-align: left;
+}
+.menu button:hover,
+.menu a:hover {
+  background: var(--chip);
+}
+.menu svg {
+  color: var(--ink-2);
+}
+.menu small {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 1px;
+}
+.menu hr {
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  margin: 4px 6px;
+}
+.kbd-hint {
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+kbd {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--chip);
+  box-shadow: inset 0 -1px 0 var(--chip-2);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  text-align: center;
+}
+
+/* Small notes at the bottom. */
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 104px;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 13px;
+  box-shadow: 0 12px 34px var(--shadow);
+  transform: translate(-50%, 12px);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.25s ease,
+    transform 0.3s var(--ease);
+}
+.toast.shown {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+.toast button {
+  font-weight: 600;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  opacity: 0.85;
+}
+
+/* Images, full screen. */
+.lightbox {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 40px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  cursor: zoom-out;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.lightbox.shown {
+  opacity: 1;
+}
+.lightbox[hidden] {
+  display: none;
+}
+.lightbox figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 100%;
+  max-height: 100%;
+}
+.lightbox img {
+  max-width: calc(100vw - 80px);
+  max-height: calc(100vh - 120px);
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 30px 80px var(--shadow);
+  transform-origin: center;
+}
+.lightbox figcaption {
+  max-width: 640px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  text-align: center;
+}
+
+/* Keyboard shortcuts. */
+.help {
+  position: absolute;
+  inset: 0;
+  z-index: 19;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.help[hidden] {
+  display: none;
+}
+.help-card {
+  width: min(520px, calc(100vw - 32px));
+  padding: 26px 28px;
+  border-radius: 18px;
+  background: var(--raised);
+  box-shadow:
+    0 30px 80px var(--shadow),
+    0 0 0 1px color-mix(in srgb, var(--line) 80%, transparent);
+  animation: panel-in 0.2s var(--ease);
+}
+.help-card h2 {
+  margin: 0 0 4px;
+  font-family: var(--font-text);
+  font-size: 24px;
+  font-weight: 600;
+}
+.help-card > p {
+  margin: 0 0 18px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.help-card dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 9px 18px;
+  margin: 0;
+  font-size: 13.5px;
+}
+.help-card dt {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+.help-card dd {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+/* Empty states: when there's no article on the page. */
+.empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+}
+.empty-card {
+  max-width: 420px;
+}
+.empty-card h2 {
+  margin: 0 0 10px;
+  font-family: var(--font-text);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.empty-card p {
+  margin: 0 0 20px;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.empty-card .actions {
+  justify-content: center;
+}
+
+@media (max-width: 1180px) {
+  .rail {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .doc {
+    padding-top: 92px;
+  }
+  .doc-title {
+    font-size: 2em;
+  }
+  .lens button {
+    min-width: 0;
+    padding: 7px 10px 6px;
+  }
+  .bar-meter {
+    display: none;
+  }
+  .doc .carousel-card {
+    flex-basis: calc(100% - 40px);
+  }
+  .panel {
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spine *,
+  .spine *::before,
+  .spine *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

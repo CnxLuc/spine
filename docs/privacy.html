@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spine privacy policy</title>
+    <meta name="description" content="What Spine, the reading extension, sends, keeps and never does." />
+    <link rel="icon" href="assets/icon-128.png" />
+    <link rel="stylesheet" href="site.css" />
+  </head>
+  <body>
+    <main class="page prose">
+      <a class="home" href="./"><img src="assets/icon-128.png" alt="" width="28" height="28" /> Spine</a>
+      <h1>Privacy policy</h1>
+      <p class="updated">Last updated 7 October 2026</p>
+
+      <p class="lead">Spine collects no data for its developer. It has no servers, no analytics and no tracking. When you agree to read with Claude, Spine sends the text of the articles you open to Anthropic, using your own API key.</p>
+
+      <h2>What Spine sends, and where</h2>
+      <p>When you open Spine on a page, and you have agreed to read with Claude, Spine sends Anthropic’s API at api.anthropic.com:</p>
+      <ul>
+        <li>the article’s title, author, site name and language</li>
+        <li>the article’s text, split into numbered sentences, with its headings, list items and image captions</li>
+        <li>your Anthropic API key, to authorise the request</li>
+      </ul>
+      <p>Spine sends this straight from your browser to Anthropic. It does not pass through any server run by Spine’s developer. Anthropic’s <a href="https://www.anthropic.com/legal/commercial-terms">commercial terms</a> and <a href="https://www.anthropic.com/legal/privacy">privacy policy</a> cover what Anthropic receives.</p>
+      <p>Spine sends each article once. It saves Claude’s notes in your browser, so opening the article again sends nothing.</p>
+      <p>If you change Spine’s API address in its settings, for example to a bridge on your own computer, Spine sends these requests to that address instead.</p>
+
+      <h2>What Spine keeps in your browser</h2>
+      <ul>
+        <li>your Anthropic API key, in Spine’s extension storage on this device</li>
+        <li>the notes Claude wrote for the last 400 articles you read, and your place in each</li>
+        <li>whether you agreed to read with Claude, and when</li>
+        <li>your settings, such as theme and text size, which your browser may sync to your other devices if you use its sync</li>
+      </ul>
+      <p>None of this leaves your browser, apart from your settings through your browser’s sync and your key sent to Anthropic as described above.</p>
+
+      <h2>Other things Spine does when you ask</h2>
+      <ul>
+        <li>Images and site icons load from the article’s own website, as they would if you read the page normally.</li>
+        <li>The copy actions put text on your clipboard.</li>
+        <li>Save to Obsidian passes a note to the Obsidian app on your device.</li>
+      </ul>
+
+      <h2>What Spine never does</h2>
+      <ul>
+        <li>sell or share your data</li>
+        <li>use your data for advertising, analytics or to decide creditworthiness</li>
+        <li>read pages you have not opened Spine on</li>
+      </ul>
+      <p>Spine’s use of the information it handles follows the <a href="https://developer.chrome.com/docs/webstore/program-policies/user-data-faq">Chrome Web Store User Data Policy</a>, including its Limited Use requirements.</p>
+
+      <h2>Stop or delete</h2>
+      <ul>
+        <li>To stop sending articles to Claude, turn off “Send the articles I open to Claude” in Spine’s settings, or remove your API key.</li>
+        <li>To delete saved notes and reading places, select Clear saved notes in Spine’s settings.</li>
+        <li>To delete everything Spine keeps, remove Spine from your browser.</li>
+      </ul>
+      <p>Anthropic keeps what it receives according to its own policy.</p>
+
+      <h2>Changes to this policy</h2>
+      <p>If Spine ever changes what it sends or where, it will tell you in the extension and ask again before sending anything.</p>
+
+      <h2>Contact</h2>
+      <p>Ask a question or report a problem on <a href="https://github.com/CnxLuc/spine/issues">Spine’s GitHub issues page</a>.</p>
+    </main>
+  </body>
+</html>
