@@ -491,3 +491,11 @@ kbd {
     padding: 20px;
   }
 }
+
+.card code.command {
+  display: block;
+  padding: 9px 11px;
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}

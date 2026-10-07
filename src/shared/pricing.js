@@ -39,7 +39,3 @@ export function money(dollars) {
   if (dollars < 0.995) return `${Math.max(1, Math.round(dollars * 100))}¢`;
   return `$${dollars.toFixed(2)}`;
 }
-
-// Spine reads through a local Claude Code bridge on the reader's own machine,
-// which bills their Claude plan, when its API address is on this computer.
-export const onPlan = baseURL => /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(String(baseURL ?? '').trim());

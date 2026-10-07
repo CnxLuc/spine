@@ -2,23 +2,29 @@
 // reader sees as the notes arrive. Uses a lasting profile in test/.profile, so
 // notes Claude wrote once are reused on later runs instead of asked for again.
 //
-//   node test/ai.mjs <url> [name] [--bridge=http://127.0.0.1:4777] [--model=claude-opus-5-5] [--fresh]
+//   node test/ai.mjs <url> [name] [--engine=claude-code|codex] [--model=claude-opus-5-5] [--fresh] [--forget]
 import { chromium } from 'playwright';
-import { mkdir, readFile, rm } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { inReader, shot, toggle } from './browser.mjs';
+import { execFileSync } from 'node:child_process';
+import { mkdir, rm } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { connectLocal, inReader, shot, toggle } from './browser.mjs';
 
 const args = process.argv.slice(2);
 const url = args.find(arg => /^https?:/.test(arg));
 const name = args.find(arg => !arg.startsWith('-') && arg !== url) ?? 'ai';
 const flag = (key, fallback) => args.find(arg => arg.startsWith(`--${key}=`))?.split('=').slice(1).join('=') ?? fallback;
-const bridge = flag('bridge', 'http://127.0.0.1:4777');
 const model = flag('model', 'claude-opus-5-5');
 
 const profile = resolve('test/.profile');
 if (args.includes('--fresh')) await rm(profile, { recursive: true, force: true });
 await mkdir(profile, { recursive: true });
+// Run the current build, not a cached copy of an older background script.
+await rm(resolve(profile, 'Default', 'Service Worker'), { recursive: true, force: true });
+// Reads through the real Claude Code or Codex on this computer, over native
+// messaging. --engine=codex picks Codex.
+const engine = flag('engine', 'claude-code');
+const which = tool => execFileSync('/bin/zsh', ['-lc', `command -v ${tool}`]).toString().trim();
+await connectLocal(profile, { claude: which('claude'), codex: which('codex') });
 const extension = resolve('.test-build');
 const context = await chromium.launchPersistentContext(profile, {
   channel: 'chromium',
@@ -29,12 +35,11 @@ const context = await chromium.launchPersistentContext(profile, {
 });
 let [worker] = context.serviceWorkers();
 worker ??= await context.waitForEvent('serviceworker');
-// The bridge's secret stands in for an API key.
-const token = (await readFile(join(homedir(), '.config/spine/bridge-token'), 'utf8')).trim();
-// The tests stand in for a reader who has already agreed to send articles.
+// As a reader who has already agreed to send articles.
 await worker.evaluate(
-  ([baseURL, model, apiKey]) => chrome.storage.local.set({ baseURL, model, apiKey, consent: { version: 1, at: Date.now() } }),
-  [bridge, model, token],
+  ([engine, model]) =>
+    chrome.storage.local.set({ engine, model, apiKey: '', baseURL: '', consent: { version: 1, at: Date.now() } }),
+  [engine, model],
 );
 // --forget drops the saved notes for this article, so Claude reads it again.
 if (args.includes('--forget')) {

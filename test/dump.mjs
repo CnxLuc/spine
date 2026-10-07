@@ -3,10 +3,12 @@
 //
 //   node test/dump.mjs <url-fragment> [--json]
 import { chromium } from 'playwright';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const fragment = process.argv[2] ?? '';
+// Run the current build, not a cached copy of an older background script.
+await rm(resolve('test/.profile', 'Default', 'Service Worker'), { recursive: true, force: true });
 const extension = resolve('.test-build');
 const context = await chromium.launchPersistentContext(resolve('test/.profile'), {
   channel: 'chromium',
@@ -20,7 +22,7 @@ await context.close();
 const entries = Object.entries(all).filter(([key]) => key.startsWith('notes:') && key.includes(fragment));
 await mkdir('test/out', { recursive: true });
 for (const [key, saved] of entries) {
-  console.log(`\n${key}  (${saved.model}, ${new Date(saved.createdAt).toISOString()})`);
+  console.log(`\n${key}  (${saved.engine ?? 'api'}, ${saved.model}, ${new Date(saved.createdAt).toISOString()})`);
   const { notes, lists, bridges } = saved;
   console.log(`keys ${notes.keySentences.length}, folds ${notes.collapseFolds.join(' ')}, chapters ${notes.chapters.length}`);
   for (const [index, summary] of Object.entries(notes.sections)) console.log(`  §${index}: ${summary}`);

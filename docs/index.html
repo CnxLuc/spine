@@ -25,7 +25,7 @@
     <section class="hero">
       <div>
         <h1>Read the spine of any long article.</h1>
-        <p class="dek">Spine turns a long piece of writing into a calm reader and uses Claude to find the sentences that carry it. Choose how much you see: all of it, the key sentences, or a note for each section. The author’s words stay; the rest folds away, one hover from view.</p>
+        <p class="dek">Spine turns a long piece of writing into a calm reader and uses Claude or Codex to find the sentences that carry it. Choose how much you see: all of it, the key sentences, or a note for each section. The author’s words stay; the rest folds away, one hover from view.</p>
         <div class="actions">
           <a class="button primary" id="get" href="https://github.com/CnxLuc/spine/releases/latest/download/spine.zip">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /></svg>
@@ -33,7 +33,7 @@
           </a>
           <a class="button" href="#install">How to install</a>
         </div>
-        <p class="fine" id="get-note">Free and open source, for Chrome, Arc, Brave, Edge, Dia and Aside. Claude’s reading is billed to your own Anthropic API credits: about 6¢ for a short post. <a href="#cost">What it costs</a></p>
+        <p class="fine" id="get-note">Free and open source, for Chrome, Arc, Brave, Edge, Dia and Aside. It reads with your own Claude Code or Codex, on your plan, or an Anthropic API key. <a href="#cost">What it costs</a></p>
       </div>
 
       <div class="demo" data-lens="read" aria-label="A demonstration of Spine’s four lenses">
@@ -85,7 +85,7 @@
 
     <section class="band" id="install">
       <h2>Install Spine</h2>
-      <p class="sub">It takes about two minutes. The Claude features need an Anthropic API key, billed to your own API credits; without one, Spine is still a calm reader view.</p>
+      <p class="sub">It takes about two minutes. Spine reads with your own Claude Code or Codex, on your plan, or with an Anthropic API key; without one, it’s still a calm reader view.</p>
       <div class="cols">
         <div class="card">
           <h3>1. Add it to your browser</h3>
@@ -96,17 +96,15 @@
           </ol>
         </div>
         <div class="card">
-          <h3>2. Add your API key</h3>
-          <ol>
-            <li>Sign up at <a href="https://platform.claude.com/">platform.claude.com</a>. The API account is separate from Claude.ai: a Pro or Max subscription can’t pay for Spine.</li>
-            <li>Add credit under Billing. $5 covers about 8 long essays or 80 short posts.</li>
-            <li>Create a key under API keys and paste it in Spine’s settings, which open when you install it.</li>
-          </ol>
+          <h3>2. Choose who reads</h3>
+          <p>Use Claude Code or Codex? Run this once in Terminal, and Spine reads on your Claude or ChatGPT plan:</p>
+          <p><code class="command">curl -fsSL https://cnxluc.github.io/spine/connect.sh | bash</code></p>
+          <p>Or use an Anthropic API key, billed to your API credits: create one at <a href="https://platform.claude.com/settings/keys">platform.claude.com</a> and paste it in Spine’s settings, which open when you install it.</p>
         </div>
         <div class="card">
           <h3>3. Read</h3>
           <p>Open any article and press <kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>S</kbd> on a Mac, or <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>S</kbd> on Windows, or select Spine’s toolbar button.</p>
-          <p>Claude reads the piece once, in 15 to 60 seconds, and Spine saves the notes, so reading it again is free.</p>
+          <p>Claude or Codex reads the piece once, in 15 to 60 seconds, and Spine saves the notes, so reading it again is free.</p>
           <p>Press <kbd>?</kbd> in Spine for every shortcut.</p>
         </div>
       </div>
@@ -114,20 +112,21 @@
 
     <section class="band" id="cost">
       <h2>What it costs</h2>
-      <p class="sub">Spine is free. Claude’s reading is billed by Anthropic to your own API credits, once per article: Spine saves the notes, so reading an article again costs nothing.</p>
+      <p class="sub">Spine is free. With your Claude Code or Codex, reading runs on your Claude or ChatGPT plan, with nothing extra to pay. With an API key, Anthropic bills your API credits, once per article: Spine saves the notes, so reading an article again costs nothing.</p>
       <div class="cost">
         <table>
-          <thead><tr><th>Model</th><th>Short post, 3 minutes</th><th>Long essay, 50 minutes</th></tr></thead>
+          <thead><tr><th>Reader</th><th>Short post, 3 minutes</th><th>Long essay, 50 minutes</th></tr></thead>
           <tbody>
-            <tr><td>Claude Opus 5.5, the default</td><td>about 6¢</td><td>about 62¢</td></tr>
-            <tr><td>Claude Sonnet 5.5</td><td>about 3¢</td><td>about 31¢</td></tr>
-            <tr><td>Claude Haiku 4.5</td><td>about 2¢</td><td>about 15¢</td></tr>
+            <tr><td>Your Claude Code or Codex</td><td>on your plan</td><td>on your plan</td></tr>
+            <tr><td>API key, Claude Opus 5.5</td><td>about 6¢</td><td>about 62¢</td></tr>
+            <tr><td>API key, Claude Sonnet 5.5</td><td>about 3¢</td><td>about 31¢</td></tr>
+            <tr><td>API key, Claude Haiku 4.5</td><td>about 2¢</td><td>about 15¢</td></tr>
           </tbody>
         </table>
         <ul>
-          <li>Spine shows what an article will cost before it reads, and what it cost after.</li>
-          <li>It asks first before reading anything over $1. Change the limit in settings.</li>
-          <li>Settings show what you’ve spent so far. You can also set a monthly limit on your Anthropic account.</li>
+          <li>On your plan, reading counts toward its usage limits, like any other use.</li>
+          <li>With an API key, Spine shows what an article will cost before it reads, and what it cost after.</li>
+          <li>It asks first before spending more than $1 on one article, and settings show what you’ve spent so far.</li>
         </ul>
       </div>
     </section>
@@ -140,8 +139,8 @@
           <p>Spine has no servers, analytics or tracking. Your key, your notes and your settings stay in your browser.</p>
         </div>
         <div class="card">
-          <h3>Straight to Anthropic</h3>
-          <p>When you agree, Spine sends the text of the articles you open straight to Anthropic, using your key, and nothing else.</p>
+          <h3>Straight to your reader</h3>
+          <p>When you agree, Spine sends the text of the articles you open to your own Claude Code or Codex, or to Anthropic with your key, and nothing else.</p>
         </div>
         <div class="card">
           <h3>Your call</h3>

@@ -1,6 +1,8 @@
 # Chrome Web Store listing
 
-Everything to paste into the [Chrome Web Store developer dashboard](https://chrome.google.com/webstore/devconsole), field by field. Upload `releases/spine-1.0.0.zip`.
+Everything to paste into the [Chrome Web Store developer dashboard](https://chrome.google.com/webstore/devconsole), field by field. Upload `releases/spine-store-1.1.0.zip`, the zip without the development key.
+
+After the first upload, the dashboard shows Spine’s item ID. Put it in `store/STORE_ID` and run `node build.mjs`, then publish `docs/`: the Claude Code and Codex connector then allows the store’s Spine too.
 
 ## Store listing tab
 
@@ -13,29 +15,29 @@ Summary (from the manifest, 117 characters):
 Description:
 
 ```
-Spine turns a long article into a calm, distraction-free reader, and uses Claude to find the sentences that carry it. You choose how much of the text you see.
+Spine turns a long article into a calm, distraction-free reader, and uses Claude or Codex to find the sentences that carry it. You choose how much of the text you see.
 
 • Read: everything, as written, in clean type with the article's images.
 • Skim: scroll, and the key sentences stay while the rest fades. Stop, and it all comes back.
 • Supercut: everything but the key sentences folds into small pills, each with a short line in the author's voice. Rest on a pill to open it.
 • Outline: each long section folds under a short note. Long essays without headings get chapters.
 
-Spine never replaces the author's words. Everything Claude writes is in the author's voice, using their words where it can, and the full text is always one hover away.
+Spine never replaces the author's words. Every note is in the author's voice, using their words where it can, and the full text is always one hover away.
 
 It also offers other ways to group a list, shows chunky lists as cards, keeps your place, and copies the supercut or outline as Markdown or saves it to Obsidian.
 
 HOW TO USE IT
 Open any article and press Alt+Shift+S (⌥⇧S on a Mac), or select Spine's toolbar button. Press 1 to 4 to switch lens, and ? for every shortcut.
 
-WHAT IT COSTS
-Spine is free. Claude's reading is billed by Anthropic to your own API credits, using your own API key from platform.claude.com. API credits are separate from a Claude.ai Pro or Max subscription, which can't pay for Spine.
+WHO READS, AND WHAT IT COSTS
+Spine is free. Choose who reads in its settings:
+• Your own Claude Code or Codex, on your Claude or ChatGPT plan, with nothing extra to pay. Connect them with one command from Spine's website; Spine never sees your sign-in.
+• An Anthropic API key, billed to your API credits. With Claude Opus 5.5, a short post costs about 6¢ and a long essay about 62¢, once per article. Spine shows the cost before it reads and asks first above $1.
 
-Claude reads each article once and Spine saves the notes, so reading it again is free. With Claude Opus 5.5, a short post costs about 6¢ and a long essay about 62¢. Claude Sonnet 5.5 costs half that, Claude Haiku 4.5 a quarter. Spine shows the cost before it reads, asks first above $1, and keeps a running total in its settings.
-
-Without a key, Spine is still a calm reader view.
+Without either, Spine is still a calm reader view.
 
 PRIVACY
-Spine has no servers and collects nothing for its developer. When you agree, it sends the text of the articles you open straight to Anthropic, using your key. Your key, notes and settings stay in your browser.
+Spine has no servers and collects nothing for its developer. When you agree, it sends the text of the articles you open to the reader you chose: your Claude Code or Codex, or Anthropic with your key. Your key, notes and settings stay in your browser.
 
 CREDITS
 Spine's reading ideas come from Tareq Ismail's Reading Long Form, episode 2 of Interfaces that think. Spine is open source under the MIT licence.
@@ -71,7 +73,7 @@ Mature content: no
 
 Single purpose description:
 
-> Spine is a reader view for long articles. It shows the article on the current page in a clean layout and uses Claude, with the user's own API key, to bring the key sentences forward, fold the rest and write a short note for each section.
+> Spine is a reader view for long articles. It shows the article on the current page in a clean layout and uses an AI the user chooses (their own Claude Code or Codex, or Claude with their own API key) to bring the key sentences forward, fold the rest and write a short note for each section.
 
 Permission justifications:
 
@@ -82,13 +84,14 @@ Permission justifications:
 | storage | Keeps the user’s settings, their Anthropic API key, the notes Claude wrote for articles they read, and their place in each, in the browser. |
 | unlimitedStorage | Saved notes for up to 400 articles can exceed the default storage limit. Keeping them means reopening an article is instant and costs nothing. |
 | contextMenus | Adds Read with Spine to the page’s right-click menu. |
+| nativeMessaging | Connects to Spine’s optional connector, which the user installs themselves, so their own Claude Code or Codex on their computer can read articles on their own plan. Spine never sees their sign-in. |
 | Host permission: https://api.anthropic.com/* | Sends the article the user chose to read to Anthropic’s API, with the user’s own key, so Claude can choose the key sentences and write the notes. This is the extension’s only network request. |
 
 Remote code: No, I am not using remote code. All JavaScript is in the package.
 
 Data usage, what the extension collects:
 
-- Website content: yes. The text of the article the user chooses to read, sent to Anthropic’s API to make the notes, after the user agrees in the extension.
+- Website content: yes. The text of the article the user chooses to read, sent to the reader they chose to make the notes, after they agree in the extension: their own Claude Code or Codex on their computer (which send it to Anthropic or OpenAI under the user’s own plan), or Anthropic’s API.
 - Authentication information: yes. The user’s own Anthropic API key, stored in the browser and sent only to Anthropic to authorise their requests.
 - Everything else (personally identifiable information, health, financial, personal communications, location, web history, user activity): no.
 
@@ -110,4 +113,4 @@ Regions: all regions
 
 ## Test instructions tab
 
-> Spine's Claude features need an Anthropic API key, billed to the key owner's API credits. Without one, it still works as a reader view. To test: open https://paulgraham.com/greatwork.html, select Spine’s toolbar button (or press Alt+Shift+S), and switch between Read and the other lenses at the bottom. With a key, add it on the settings page that opens on install, accept the prompt to read with Claude, and wait about 30 seconds for the key sentences to light up.
+> Spine's AI features need an Anthropic API key, or the user's own Claude Code or Codex connected with Spine's installer. Without either, it still works as a reader view. To test: open https://paulgraham.com/greatwork.html, select Spine’s toolbar button (or press Alt+Shift+S), and switch between Read and the other lenses at the bottom. With a key, add it on the settings page that opens on install, accept the prompt to read with Claude, and wait about 30 seconds for the key sentences to light up.

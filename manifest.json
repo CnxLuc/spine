@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Spine",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyVhtNoh/tGR2Rs9jw75nScG3dvU1j2d3tZGg4J1EeV/xFFHfHpcbxJ73J2NEeQLSUcsdQBALsMicRUGGwWCzGLQAQJcjlhiPAUnXEeml9GagowwOpGBh/PNbD70/Aayej2ePs52SH1nf5GoH/rMPKDyXMYuNOT7T2KHUi+9Zbauh/sPPrzCAdKWcjT3rbaXdXwrZo5PcwlmgtMdRDSzUJRe3+gmsYEE7efAbv6RCWBCSywqnGYABglh1gLFJv8LXILcqZiXvKGaJDL3dv2T6x9fr5SwYWbWpLUVG12LBA2EXZde4NLaa1oNl7RXNPLy+K6c7P10hSo5nkBqgj+7n/QIDAQAB",
   "description": "A calm reading layer for long writing. Key sentences come forward, asides fold away, sections fold under short notes.",
   "homepage_url": "https://cnxluc.github.io/spine/",
@@ -27,7 +27,8 @@
     "scripting",
     "storage",
     "unlimitedStorage",
-    "contextMenus"
+    "contextMenus",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "https://api.anthropic.com/*"

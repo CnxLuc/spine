@@ -4,7 +4,6 @@
 // extension's storage, and never reaches a page.
 import Anthropic from '@anthropic-ai/sdk';
 import { DEFAULT_MODEL, INPUTS, SCHEMAS, SYSTEMS } from './shared/prompts.js';
-import { onPlan } from './shared/pricing.js';
 import { ICONS } from './shared/lucide-icons.js';
 
 // Opening Spine on a tab: ask the reader there to toggle, and if no reader is
@@ -56,9 +55,17 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     chrome.runtime.openOptionsPage();
     reply({ ok: true });
   } else if (message?.type === 'spine:settings') {
-    settings().then(({ apiKey, baseURL, model }) =>
-      reply({ ready: Boolean(apiKey || baseURL), model, billing: onPlan(baseURL) ? 'plan' : 'api' }),
-    );
+    settings()
+      .then(async config => {
+        const way = await engine(config);
+        reply({ ready: way.ready, model: config.model, billing: way.kind === 'api' ? 'api' : 'plan', engine: way.kind });
+      })
+      .catch(() => reply({ ready: false }));
+    return true;
+  } else if (message?.type === 'spine:engine') {
+    settings()
+      .then(async config => reply({ choice: config.engine, ...(await engine(config, { fresh: Boolean(message.fresh) })) }))
+      .catch(error => reply({ error: String(error) }));
     return true;
   } else if (message?.type === 'spine:test-key') {
     testKey(message).then(reply);
@@ -68,17 +75,81 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
 });
 
 async function settings() {
-  const { apiKey = '', baseURL = '', model = DEFAULT_MODEL } = await chrome.storage.local.get([
+  const { apiKey = '', baseURL = '', model = DEFAULT_MODEL, engine = 'auto' } = await chrome.storage.local.get([
     'apiKey',
     'baseURL',
     'model',
+    'engine',
   ]);
-  return { apiKey: apiKey.trim(), baseURL: baseURL.trim(), model };
+  return { apiKey: apiKey.trim(), baseURL: baseURL.trim(), model, engine };
 }
+
+// Claude Code or Codex on this computer, reached through Spine's native
+// messaging host (native/spine_host.py), which the reader installs with one
+// command. The browser starts the host for each connection and only lets Spine
+// in. The host runs the reader's own, unmodified `claude -p` or `codex exec`,
+// so reading uses their Claude or ChatGPT plan; Spine never sees their sign-in.
+const HOST = 'com.spine.local';
+const TOOLS = { 'claude-code': 'claude', codex: 'codex' };
+let found = null;
+
+function probeLocal() {
+  return new Promise(resolve => {
+    let port;
+    try {
+      port = chrome.runtime.connectNative(HOST);
+    } catch {
+      resolve({ available: false, reason: 'unsupported' });
+      return;
+    }
+    const finish = result => {
+      clearTimeout(timer);
+      try {
+        port.disconnect();
+      } catch {}
+      resolve(result);
+    };
+    const timer = setTimeout(() => finish({ available: false, reason: 'timeout' }), 20000);
+    port.onMessage.addListener(message => {
+      if (message?.type === 'pong') finish({ available: true, claude: message.claude ?? null, codex: message.codex ?? null });
+    });
+    port.onDisconnect.addListener(() => {
+      const reason = chrome.runtime.lastError?.message ?? '';
+      finish({ available: false, reason: /not found/i.test(reason) ? 'not-installed' : reason || 'closed' });
+    });
+    port.postMessage({ type: 'ping' });
+  });
+}
+
+// What's on this computer, asked again at most once a minute.
+async function local({ fresh = false } = {}) {
+  if (!fresh && found && Date.now() - found.at < 60000) return found;
+  found = { ...(await probeLocal()), at: Date.now() };
+  return found;
+}
+
+// Which way Spine reads: the one the reader chose, or by default Claude Code,
+// then Codex, when it's here and signed in; otherwise the Anthropic API key.
+async function engine(config, options) {
+  const here = config.engine === 'api' ? null : await local(options);
+  const ready = kind => Boolean(here?.[TOOLS[kind]]?.signedIn);
+  const kind =
+    config.engine === 'claude-code' || config.engine === 'codex'
+      ? config.engine
+      : config.engine === 'auto' && ready('claude-code')
+        ? 'claude-code'
+        : config.engine === 'auto' && ready('codex')
+          ? 'codex'
+          : 'api';
+  if (kind === 'api') return { kind, ready: Boolean(config.apiKey || config.baseURL), local: here };
+  return { kind, ready: ready(kind), local: here };
+}
+
+const NAMES = { 'claude-code': 'Claude Code', codex: 'Codex' };
 
 function client({ apiKey, baseURL }) {
   return new Anthropic({
-    apiKey: apiKey || 'local-bridge',
+    apiKey: apiKey || 'unset',
     baseURL: baseURL || undefined,
     dangerouslyAllowBrowser: true,
     maxRetries: 2,
@@ -89,11 +160,62 @@ function client({ apiKey, baseURL }) {
 // What each kind of request costs in output, at most.
 const MAX_TOKENS = { notes: 32000, lists: 16000, bridges: 16000 };
 
+const inputFor = (kind, payload) =>
+  kind === 'lists' ? INPUTS.lists(payload, Object.keys(ICONS)) : INPUTS[kind](payload);
+
+// One read through Claude Code or Codex: the host streams the reply back, and
+// closing the reader's port stops it, which stops the tool.
+function readLocally(port, signal, kind, request, payload, model) {
+  const name = NAMES[kind];
+  let native;
+  try {
+    native = chrome.runtime.connectNative(HOST);
+  } catch {
+    port.postMessage({ type: 'error', code: 'local', message: `Spine can’t reach ${name} on this computer.` });
+    return;
+  }
+  let settled = false;
+  signal.addEventListener('abort', () => {
+    settled = true;
+    try {
+      native.disconnect();
+    } catch {}
+  });
+  const relay = message => {
+    try {
+      port.postMessage(message);
+    } catch {}
+  };
+  native.onMessage.addListener(message => {
+    if (message?.type === 'delta') relay({ type: 'delta', text: message.text });
+    else if (message?.type === 'done') {
+      settled = true;
+      relay({ type: 'done', text: message.text, model: kind === 'codex' ? 'codex' : model, usage: message.usage, billing: 'plan' });
+    } else if (message?.type === 'error') {
+      settled = true;
+      relay({ type: 'error', code: message.code || 'local', message: message.message.replace(/^It\b/, name) });
+    }
+  });
+  native.onDisconnect.addListener(() => {
+    if (!settled) relay({ type: 'error', code: 'local', message: `${name} stopped before it finished. Try again.` });
+    settled = true;
+  });
+  native.postMessage({
+    type: 'run',
+    engine: TOOLS[kind],
+    model,
+    // Codex answers in one go; it reads the notes carefully and the rest quickly.
+    effort: kind === 'codex' && request !== 'notes' ? 'low' : 'medium',
+    system: SYSTEMS[request],
+    user: inputFor(request, payload),
+    schema: SCHEMAS[request],
+  });
+}
+
 // Opus 5.5 and Sonnet 5.5 think adaptively, at medium effort, and fall back to
 // another model if their safeguards decline a request; Haiku 4.5 does neither.
 function request(kind, payload, model) {
-  const input =
-    kind === 'lists' ? INPUTS.lists(payload, Object.keys(ICONS)) : INPUTS[kind](payload);
+  const input = inputFor(kind, payload);
   const body = {
     model,
     max_tokens: MAX_TOKENS[kind],
@@ -147,11 +269,27 @@ chrome.runtime.onConnect.addListener(port => {
   port.onMessage.addListener(async message => {
     if (message?.type !== 'run') return;
     const config = await settings();
+    const way = await engine(config);
+    const model = message.model || config.model;
+    if (way.kind !== 'api') {
+      const name = NAMES[way.kind];
+      if (!way.ready) {
+        port.postMessage({
+          type: 'error',
+          code: 'local',
+          message: way.local?.[TOOLS[way.kind]]
+            ? `${name} isn’t signed in. Run ${TOOLS[way.kind]} in Terminal and sign in, then try again.`
+            : `Spine can’t reach ${name} on this computer. Open Spine’s settings to connect it.`,
+        });
+        return;
+      }
+      readLocally(port, controller.signal, way.kind, message.kind, message.payload, model);
+      return;
+    }
     if (!config.apiKey && !config.baseURL) {
       port.postMessage({ type: 'error', code: 'no-key', message: 'Add your Anthropic API key in Spine’s settings.' });
       return;
     }
-    const model = message.model || config.model;
     try {
       const stream = client(config).beta.messages.stream(request(message.kind, message.payload, model), {
         signal: controller.signal,

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { costOf, estimate, money, onPlan } from '../src/shared/pricing.js';
+import { costOf, estimate, money } from '../src/shared/pricing.js';
 
 test('costs a reply from its usage', () => {
   // 10,000 tokens in and 2,000 out on Opus 5.5: 4¢ + 4¢.
@@ -27,12 +27,4 @@ test('writes money the way people read it', () => {
   assert.equal(money(0.4149), '41¢');
   assert.equal(money(0.996), '$1.00');
   assert.equal(money(1.4), '$1.40');
-});
-
-test('knows when Spine reads on a Claude plan', () => {
-  assert.ok(onPlan('http://127.0.0.1:4777'));
-  assert.ok(onPlan('http://localhost:4777/'));
-  assert.ok(!onPlan(''));
-  assert.ok(!onPlan('https://api.anthropic.com'));
-  assert.ok(!onPlan('http://0.0.0.0:9'));
 });

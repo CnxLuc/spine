@@ -8,3 +8,4 @@ store/raw/
 test/.profile/
 test/out/
 test/probe.mjs
+native/work/

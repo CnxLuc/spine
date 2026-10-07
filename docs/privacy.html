@@ -12,26 +12,32 @@
     <main class="page prose">
       <a class="home" href="./"><img src="assets/icon-128.png" alt="" width="28" height="28" /> Spine</a>
       <h1>Privacy policy</h1>
-      <p class="updated">Last updated 7 October 2026</p>
+      <p class="updated">Last updated 7 October 2026, for Claude Code and Codex</p>
 
-      <p class="lead">Spine collects no data for its developer. It has no servers, no analytics and no tracking. When you agree to read with Claude, Spine sends the text of the articles you open to Anthropic, using your own API key.</p>
+      <p class="lead">Spine collects no data for its developer. It has no servers, no analytics and no tracking. When you agree to have articles read, Spine sends the text of the articles you open to the reader you chose: your own Claude Code or Codex, or Anthropic’s API with your key.</p>
 
       <h2>What Spine sends, and where</h2>
-      <p>When you open Spine on a page, and you have agreed to read with Claude, Spine sends Anthropic’s API at api.anthropic.com:</p>
+      <p>When you open Spine on a page, and you have agreed to have articles read, Spine sends:</p>
       <ul>
         <li>the article’s title, author, site name and language</li>
         <li>the article’s text, split into numbered sentences, with its headings, list items and image captions</li>
-        <li>your Anthropic API key, to authorise the request</li>
       </ul>
-      <p>Spine sends this straight from your browser to Anthropic. It does not pass through any server run by Spine’s developer. Anthropic’s <a href="https://www.anthropic.com/legal/commercial-terms">commercial terms</a> and <a href="https://www.anthropic.com/legal/privacy">privacy policy</a> cover what Anthropic receives.</p>
-      <p>Spine sends each article once. It saves Claude’s notes in your browser, so opening the article again sends nothing.</p>
-      <p>If you change Spine’s API address in its settings, for example to a bridge on your own computer, Spine sends these requests to that address instead.</p>
+      <p>It sends them to one of these, whichever you chose in Spine’s settings:</p>
+      <ul>
+        <li>Claude Code on your computer, which sends them to Anthropic under your Claude plan and Anthropic’s <a href="https://www.anthropic.com/legal/consumer-terms">consumer terms</a> and <a href="https://www.anthropic.com/legal/privacy">privacy policy</a></li>
+        <li>Codex on your computer, which sends them to OpenAI under your ChatGPT plan and OpenAI’s <a href="https://openai.com/policies/terms-of-use/">terms of use</a> and <a href="https://openai.com/policies/privacy-policy/">privacy policy</a></li>
+        <li>Anthropic’s API at api.anthropic.com, with your API key, under Anthropic’s <a href="https://www.anthropic.com/legal/commercial-terms">commercial terms</a> and <a href="https://www.anthropic.com/legal/privacy">privacy policy</a></li>
+      </ul>
+      <p>To reach Claude Code or Codex, Spine uses a small connector program you install yourself. Your browser starts it only when Spine asks for a reading; it hands the article to your own Claude Code or Codex, returns the reply and exits. It keeps nothing, and it never reads your Claude or ChatGPT sign-in.</p>
+      <p>With the API, Spine sends the article straight from your browser to Anthropic, with your key. It does not pass through any server run by Spine’s developer.</p>
+      <p>Spine sends each article once. It saves the notes in your browser, so opening the article again sends nothing.</p>
+      <p>If you change Spine’s API address in its settings, Spine sends API requests to that address instead.</p>
 
       <h2>What Spine keeps in your browser</h2>
       <ul>
         <li>your Anthropic API key, in Spine’s extension storage on this device</li>
         <li>the notes Claude wrote for the last 400 articles you read, and your place in each</li>
-        <li>whether you agreed to read with Claude, and when</li>
+        <li>which reader you chose, whether you agreed to have articles read, and when</li>
         <li>your settings, such as theme and text size, which your browser may sync to your other devices if you use its sync</li>
       </ul>
       <p>None of this leaves your browser, apart from your settings through your browser’s sync and your key sent to Anthropic as described above.</p>
@@ -53,11 +59,12 @@
 
       <h2>Stop or delete</h2>
       <ul>
-        <li>To stop sending articles to Claude, turn off “Send the articles I open to Claude” in Spine’s settings, or remove your API key.</li>
+        <li>To stop sending articles, turn off “Send the articles I open to be read” in Spine’s settings.</li>
+        <li>To remove the connector for Claude Code and Codex, run its installer again with <code>--uninstall</code>.</li>
         <li>To delete saved notes and reading places, select Clear saved notes in Spine’s settings.</li>
         <li>To delete everything Spine keeps, remove Spine from your browser.</li>
       </ul>
-      <p>Anthropic keeps what it receives according to its own policy.</p>
+      <p>Anthropic and OpenAI keep what they receive according to their own policies.</p>
 
       <h2>Changes to this policy</h2>
       <p>If Spine ever changes what it sends or where, it will tell you in the extension and ask again before sending anything.</p>

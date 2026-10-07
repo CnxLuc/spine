@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+"""A stand-in for `claude`, for testing Spine's native host without Claude."""
+import json, os, sys
+
+args = sys.argv[1:]
+if args[:1] == ["--version"]:
+    print("9.9.9 (Claude Code)")
+    sys.exit(0)
+if args[:2] == ["auth", "status"]:
+    print(json.dumps({"loggedIn": os.environ.get("FAKE_CLAUDE_LOGGED_OUT") != "1", "authMethod": "claude.ai"}))
+    sys.exit(0)
+
+user = sys.stdin.read()
+emit = lambda message: print(json.dumps(message), flush=True)
+if os.environ.get("FAKE_CLAUDE_FAIL") == "limit":
+    emit({"type": "result", "is_error": True, "result": "Claude AI usage limit reached|1791342600"})
+    sys.exit(1)
+model = args[args.index("--model") + 1] if "--model" in args else ""
+schema = json.loads(args[args.index("--json-schema") + 1]) if "--json-schema" in args else None
+reply = json.dumps({"echo": user[:24], "model": model, "fields": sorted((schema or {}).get("properties", {}))})
+emit({"type": "stream_event", "event": {"type": "content_block_start", "content_block": {"type": "tool_use", "name": "StructuredOutput"}}})
+for at in range(0, len(reply), 7):
+    emit({"type": "stream_event", "event": {"type": "content_block_delta", "delta": {"type": "input_json_delta", "partial_json": reply[at:at + 7]}}})
+emit({"type": "stream_event", "event": {"type": "content_block_stop"}})
+emit({"type": "result", "is_error": False, "usage": {"input_tokens": 12, "output_tokens": 34}})

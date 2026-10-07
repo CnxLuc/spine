@@ -6,7 +6,7 @@ import { money } from '../shared/pricing.js';
 
 const $ = id => document.getElementById(id);
 
-const local = await chrome.storage.local.get(['apiKey', 'model', 'baseURL']);
+const local = await chrome.storage.local.get(['apiKey', 'model', 'baseURL', 'engine']);
 const synced = { ...DEFAULTS, ...(await chrome.storage.sync.get(Object.keys(DEFAULTS))) };
 
 // The key, with a short pause before saving while you type.
@@ -39,6 +39,8 @@ for (const model of MODELS) {
   name.textContent = model.name;
   const note = document.createElement('small');
   note.textContent = model.note;
+  note.dataset.api = model.note;
+  note.dataset.plan = model.planNote;
   text.append(name, note);
   label.append(input, text);
   models.append(label);
@@ -46,16 +48,67 @@ for (const model of MODELS) {
 
 const base = $('baseURL');
 base.value = local.baseURL ?? '';
-const showBridge = () => {
-  $('bridge-note').hidden = !base.value.trim();
-  $('bridge-address').textContent = base.value.trim();
-  key.placeholder = base.value.trim() ? 'The bridge’s token' : 'sk-ant-…';
-};
-showBridge();
-base.addEventListener('change', () => {
-  chrome.storage.local.set({ baseURL: base.value.trim() });
-  showBridge();
+base.addEventListener('change', () => chrome.storage.local.set({ baseURL: base.value.trim() }));
+
+// Who reads: Claude Code or Codex on this computer, on the reader's own plan,
+// or an Anthropic API key. Unless the reader picks, Spine uses Claude Code, then
+// Codex, whichever is connected and signed in.
+const setup = $('local-setup');
+function showEngine(kind) {
+  for (const input of document.querySelectorAll('input[name="engine"]')) input.checked = input.value === kind;
+  $('api-settings').hidden = kind !== 'api';
+  // On a plan, models differ in how much of its limits they use, not in price.
+  for (const note of document.querySelectorAll('.model small')) note.textContent = note.dataset[kind === 'api' ? 'api' : 'plan'];
+  $('models-field').hidden = kind === 'codex';
+  $('codex-model').hidden = kind !== 'codex';
+  $('auto-hint').textContent =
+    kind === 'api' ? 'Turn this off to choose which articles to spend API credits on.' : 'Turn this off to choose which articles are read.';
+}
+function describe(element, tool, name, command, plan) {
+  if (!tool) {
+    element.className = 'engine-status';
+    element.textContent = `${name} isn’t installed on this computer.`;
+  } else if (tool.signedIn) {
+    element.className = 'engine-status ok';
+    element.textContent = `Connected: ${tool.version || name}, signed in to your ${plan} plan.`;
+  } else {
+    element.className = 'engine-status warn';
+    element.textContent = `${name} is here but not signed in. Run ${command} in Terminal and sign in, then check again.`;
+  }
+}
+async function checkLocal(fresh = false) {
+  for (const id of ['claude-status', 'codex-status']) {
+    $(id).className = 'engine-status';
+    $(id).textContent = 'Checking…';
+  }
+  const state = await chrome.runtime.sendMessage({ type: 'spine:engine', fresh });
+  const here = state.local ?? {};
+  if (here.available) {
+    describe($('claude-status'), here.claude, 'Claude Code', 'claude', 'Claude');
+    describe($('codex-status'), here.codex, 'Codex', 'codex', 'ChatGPT');
+    setup.hidden = Boolean(here.claude || here.codex);
+  } else {
+    const text = here.reason === 'timeout' ? 'Didn’t answer. Check again in a moment.' : 'Not connected yet.';
+    for (const id of ['claude-status', 'codex-status']) $(id).textContent = text;
+    setup.hidden = false;
+  }
+  showEngine(state.kind);
+  return state;
+}
+for (const input of document.querySelectorAll('input[name="engine"]')) {
+  input.addEventListener('change', () => {
+    chrome.storage.local.set({ engine: input.value });
+    showEngine(input.value);
+  });
+}
+$('check-again').addEventListener('click', () => checkLocal(true));
+$('copy-command').addEventListener('click', async () => {
+  await navigator.clipboard.writeText($('local-command').textContent);
+  $('copy-command').textContent = 'Copied';
+  setTimeout(() => ($('copy-command').textContent = 'Copy'), 1500);
 });
+showEngine(['api', 'codex'].includes(local.engine) ? local.engine : 'claude-code');
+checkLocal();
 
 $('test').addEventListener('click', async () => {
   const result = $('test-result');

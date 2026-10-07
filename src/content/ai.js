@@ -94,7 +94,7 @@ export class Analysis {
   }
 
   // What a reply cost, added to this article's total. On a Claude plan,
-  // through the local bridge, nothing is billed to API credits.
+  // through Claude Code, nothing is billed to API credits.
   charge(reply) {
     if (this.billing === 'api') this.spend += costOf(reply.model, reply.usage, this.model);
   }
@@ -117,7 +117,7 @@ export class Analysis {
     this.model = settings.model;
     this.billing = settings.billing;
     const full = estimate(article.words, this.model);
-    reader.cost = { billing: this.billing, full, estimate: full };
+    reader.cost = { billing: this.billing, engine: settings.engine, full, estimate: full };
 
     if (fresh?.notes) {
       reader.applyNotes(fresh.notes, { settled: true });
@@ -127,7 +127,14 @@ export class Analysis {
       const missingLists = !fresh.lists && article.lists.length;
       const missingBridges = reader.runs.some(run => !asked.has(run.key));
       if (!missingLists && !missingBridges) {
-        reader.setAI('ready', { model: fresh.model, at: fresh.createdAt, cost: fresh.cost, billing: fresh.billing, cached: true });
+        reader.setAI('ready', {
+          model: fresh.model,
+          at: fresh.createdAt,
+          cost: fresh.cost,
+          billing: fresh.billing,
+          engine: fresh.engine,
+          cached: true,
+        });
         return;
       }
     }
@@ -167,6 +174,7 @@ export class Analysis {
       await Promise.all(jobs);
       this.saved.createdAt = Date.now();
       this.saved.billing = this.billing;
+      this.saved.engine = settings.engine;
       this.saved.cost = (fresh?.cost ?? 0) + this.spend;
       await saveNotes(article.key, this.saved);
       reader.setAI('ready', {
@@ -174,6 +182,7 @@ export class Analysis {
         at: this.saved.createdAt,
         cost: this.saved.cost,
         billing: this.billing,
+        engine: settings.engine,
       });
     } catch (error) {
       if (error.code === 'aborted') return;

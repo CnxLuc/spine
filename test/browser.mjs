@@ -2,15 +2,47 @@
 // at the reader. Build with `node build.mjs --test` first, so the background
 // worker can open Spine on any tab without a click.
 import { chromium } from 'playwright';
-import { mkdir, mkdtemp } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-// persistent keeps the profile in test/.profile, where saved notes live between runs.
-export async function launch({ headless = true, width = 1440, height = 900, dark = false, persistent = false } = {}) {
+// Connects a test profile to Claude Code and Codex the way the installer
+// connects a browser: Chromium finds native messaging hosts in the profile's
+// own NativeMessagingHosts folder. claude and codex are the binaries the host
+// runs: the real ones, or the fakes in test/fixtures.
+export async function connectLocal(profile, { claude = null, codex = null } = {}) {
+  const folder = join(profile, 'NativeMessagingHosts');
+  await mkdir(folder, { recursive: true });
+  const wrapper = join(profile, 'spine-host');
+  const lines = ['#!/bin/sh'];
+  // An unset tool points at nothing, so the host doesn't find the real one.
+  lines.push(`export CLAUDE_BIN="${claude ?? '/nonexistent'}"`, `export CODEX_BIN="${codex ?? '/nonexistent'}"`);
+  lines.push(`exec /usr/bin/python3 "${resolve('native/spine_host.py')}"`);
+  await writeFile(wrapper, `${lines.join('\n')}\n`, { mode: 0o755 });
+  await writeFile(
+    join(folder, 'com.spine.local.json'),
+    JSON.stringify({
+      name: 'com.spine.local',
+      description: 'Spine test host',
+      path: wrapper,
+      type: 'stdio',
+      allowed_origins: ['chrome-extension://hbaekihlobpbmhciebgibgeljinadcib/'],
+    }),
+  );
+}
+
+// persistent keeps the profile in test/.profile, where saved notes live between
+// runs. claude and codex connect the profile to those binaries.
+export async function launch({ headless = true, width = 1440, height = 900, dark = false, persistent = false, claude = null, codex = null } = {}) {
   const extension = resolve('.test-build');
   const profile = persistent ? resolve('test/.profile') : await mkdtemp(join(tmpdir(), 'spine-profile-'));
-  if (persistent) await mkdir(profile, { recursive: true });
+  if (persistent) {
+    await mkdir(profile, { recursive: true });
+    // Chromium keeps running a cached copy of an extension's background script
+    // after its files change; clear the cache so tests run the current build.
+    await rm(join(profile, 'Default', 'Service Worker'), { recursive: true, force: true });
+  }
+  if (claude || codex) await connectLocal(profile, { claude, codex });
   const context = await chromium.launchPersistentContext(profile, {
     channel: 'chromium',
     headless,

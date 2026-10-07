@@ -549,11 +549,23 @@ export class Reader {
     this.read(Boolean(this.ai.force));
   }
 
+  // Who reads, in words: Claude (through Claude Code or the API) or Codex; the
+  // tool on this computer; and the plan it runs on.
+  get who() {
+    return this.cost?.engine === 'codex' ? 'Codex' : 'Claude';
+  }
+  get tool() {
+    return this.cost?.engine === 'codex' ? 'Codex' : 'Claude Code';
+  }
+  get plan() {
+    return this.cost?.engine === 'codex' ? 'ChatGPT' : 'Claude';
+  }
+
   // What reading this article costs, in words: on API credits, an estimate;
-  // on a Claude plan, nothing extra.
+  // on a plan, nothing extra.
   costLine(prefix = 'about') {
     if (!this.cost) return '';
-    if (this.cost.billing === 'plan') return 'on your Claude plan';
+    if (this.cost.billing === 'plan') return `on your ${this.plan} plan`;
     return `${prefix} ${money(this.cost.estimate)} of your API credits`;
   }
 
@@ -588,7 +600,7 @@ export class Reader {
     };
     if (state === 'reading') {
       const progress = this.ai.progress ?? 0;
-      status.innerHTML = `${spark}<span>${progress > 0.86 ? 'Writing section notes' : 'Claude is reading'}</span><span class="meter"><i></i></span><span class="cost"></span>`;
+      status.innerHTML = `${spark}<span>${progress > 0.86 ? 'Writing section notes' : `${this.who} is reading`}</span><span class="meter"><i></i></span><span class="cost"></span>`;
       status.querySelector('.cost').textContent = this.cost?.billing === 'api' ? `~${money(this.cost.estimate)}` : '';
       status.querySelector('.meter i').style.setProperty('--p', Math.max(0.04, progress));
       show();
@@ -615,9 +627,9 @@ export class Reader {
       status.innerHTML = `${spark}<span></span>`;
       status.querySelector('span:last-child').textContent =
         this.cost?.billing === 'plan'
-          ? 'Read with Claude? Spine sends each article you open to Claude, on your Claude plan.'
+          ? `Read with ${this.who}? Spine asks ${this.tool} on this computer to read each article you open, on your ${this.plan} plan.`
           : `Read with Claude? Each article you open is sent to Anthropic and billed to your API credits. This one: about ${money(this.cost?.estimate ?? 0)}.`;
-      const yes = el('button', 'yes', 'Read with Claude');
+      const yes = el('button', 'yes', `Read with ${this.who}`);
       yes.addEventListener('click', () => this.consent());
       const no = el('button', null, 'Not now');
       no.addEventListener('click', () => {
@@ -640,7 +652,7 @@ export class Reader {
       status.append(yes, no);
       show();
     } else if (state === 'no-key') {
-      status.innerHTML = `${spark}<span>Add a Claude API key to bring the key sentences forward</span>`;
+      status.innerHTML = `${spark}<span>Connect Claude Code, Codex or an API key to bring the key sentences forward</span>`;
       const open = el('button', null, 'Settings');
       open.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'spine:options' }));
       status.append(open);
@@ -1016,13 +1028,13 @@ export class Reader {
       text.append(s);
     };
     if (state === 'consent') {
-      strong('Read this with Claude?');
+      strong(`Read this with ${this.who}?`);
       text.append(
         this.cost?.billing === 'plan'
-          ? 'When you open an article, Spine sends its text to Claude through your local bridge, on your Claude plan, so Claude can pick the key sentences and write the notes. It sends nothing else. You can turn this off in settings.'
+          ? `When you open an article, Spine asks ${this.tool} on this computer to read it, so it can pick the key sentences and write the notes. It runs on your ${this.plan} plan and counts toward its usage limits. Spine sends nothing else, and never sees your sign-in. You can turn this off in settings.`
           : `When you open an article, Spine sends its text to Anthropic’s API with your key, so Claude can pick the key sentences and write the notes. Anthropic bills it to your API credits, not a Claude.ai subscription: about ${money(this.cost?.estimate ?? 0)} for this one, once. It sends nothing else. You can turn this off in settings.`,
       );
-      button('Read with Claude', true, () => this.consent());
+      button(`Read with ${this.who}`, true, () => this.consent());
       settingsButton();
     } else if (state === 'confirm') {
       strong('A long one');
@@ -1030,47 +1042,52 @@ export class Reader {
       button('Read it', true, () => this.read(Boolean(this.ai.force)));
       settingsButton();
     } else if (state === 'no-key') {
-      strong('Spine reads with Claude');
-      text.append('Add your Anthropic API key to bring the key sentences forward, fold the rest, and write a note for each section.');
-      button('Add API key', true, () => chrome.runtime.sendMessage({ type: 'spine:options' }));
+      strong('Connect someone to read with');
+      text.append('Spine reads with Claude Code or Codex on this computer, on your own plan, or with an Anthropic API key. Set one up to bring the key sentences forward, fold the rest and write a note for each section.');
+      button('Set it up', true, () => chrome.runtime.sendMessage({ type: 'spine:options' }));
     } else if (state === 'reading' || state === 'bridging') {
-      strong(state === 'reading' ? 'Claude is reading this piece' : 'Writing bridges');
+      strong(state === 'reading' ? `${this.who} is reading this piece` : 'Writing bridges');
       text.append('Key sentences light up as they’re chosen. You can keep reading.');
       button('Stop', false, () => {
         this.analysis?.cancel();
         this.setAI('paused');
       });
     } else if (state === 'error') {
-      strong('Claude couldn’t read this piece');
+      strong(`${this.who} couldn’t read this piece`);
       text.append(this.ai.message ?? '');
       button('Try again', true, () => this.read(false));
       settingsButton();
     } else if (state === 'short') {
       strong('A short piece');
-      text.append(`At ${this.article?.words ?? 0} words, Spine didn’t ask Claude to read it. Reading it costs ${this.costLine()}.`);
+      text.append(`At ${this.article?.words ?? 0} words, Spine didn’t ask ${this.who} to read it. Reading it costs ${this.costLine()}.`);
       button('Read it anyway', true, () => this.read(true));
     } else if (state === 'paused') {
       strong('Not read yet');
-      text.append(`Spine waits for you before asking Claude to read.${this.cost ? ` Reading it costs ${this.costLine()}.` : ''}`);
-      button('Read with Claude', true, () => this.read(false));
+      text.append(`Spine waits for you before asking ${this.who} to read.${this.cost ? ` Reading it costs ${this.costLine()}.` : ''}`);
+      button(`Read with ${this.who}`, true, () => this.read(false));
       settingsButton();
     } else if (state === 'ready') {
       strong(this.ai.cached ? 'Notes saved from before' : 'Notes ready');
       const model = String(this.ai.model ?? '')
+        .replace(/^codex$/, 'Codex')
         .replace(/^claude-/, 'Claude ')
         .replace(/-(\d)-(\d)$/, ' $1.$2')
         .replace(/-/g, ' ')
         .replace(/\b(opus|sonnet|haiku)\b/i, word => word[0].toUpperCase() + word.slice(1));
       const when = this.ai.at ? new Date(this.ai.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
       const spent =
-        this.ai.billing === 'plan' ? 'on your Claude plan' : this.ai.cost ? `${money(this.ai.cost)} of API credits` : '';
-      text.append([model, when, spent].filter(Boolean).join(' · ') || 'Written by Claude');
+        this.ai.billing === 'plan'
+          ? `on your ${this.ai.engine === 'codex' ? 'ChatGPT' : 'Claude'} plan`
+          : this.ai.cost
+            ? `${money(this.ai.cost)} of API credits`
+            : '';
+      text.append([model, when, spent].filter(Boolean).join(' · ') || `Written by ${this.who}`);
       button(this.cost?.billing === 'api' ? `Read again, ~${money(this.cost.full)}` : 'Read again', false, () => this.read(true));
       settingsButton();
     } else {
       strong('Reading notes');
-      text.append('Claude hasn’t read this piece yet.');
-      button('Read with Claude', true, () => this.read(false));
+      text.append(`${this.who} hasn’t read this piece yet.`);
+      button(`Read with ${this.who}`, true, () => this.read(false));
     }
     box.append(glyph, text);
     head.append(box, actions);

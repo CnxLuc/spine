@@ -192,7 +192,7 @@ button:hover {
 }
 .models {
   border: 0;
-  margin: 0;
+  margin: 18px 0 0;
   padding: 0;
 }
 .models legend {
@@ -387,4 +387,96 @@ select {
 }
 .field.inline select {
   flex: none;
+}
+
+.engines {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 20px;
+}
+.engine {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--raised);
+  box-shadow: 0 0 0 1px var(--line);
+  cursor: pointer;
+}
+.engine:has(input:checked) {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.engine input {
+  margin-top: 4px;
+  accent-color: var(--accent);
+}
+.engine-body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.engine-body b {
+  font-weight: 600;
+}
+.engine-body small {
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.engine-status {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+.engine-status.ok {
+  color: var(--good);
+}
+.engine-status.warn {
+  color: var(--bad);
+}
+.setup {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.setup[hidden] {
+  display: none;
+}
+.setup code {
+  display: block;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: var(--chip);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.setup-actions {
+  display: flex;
+  gap: 8px;
+}
+.setup-actions button {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+#api-settings[hidden] {
+  display: none;
+}
+
+#local-setup {
+  margin: -2px 0 2px;
+  padding: 12px 16px 14px;
+  border-radius: 14px;
+  background: var(--chip);
+}
+.codex-model {
+  margin: 18px 0 0;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+.codex-model[hidden] {
+  display: none;
 }

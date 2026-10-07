@@ -150,16 +150,19 @@ export const MODELS = [
     id: 'claude-opus-5-5',
     name: 'Claude Opus 5.5',
     note: 'Reads most carefully. About 6¢ a short post, 62¢ a long essay.',
+    planNote: 'Reads most carefully, and uses the most of your plan’s limits.',
   },
   {
     id: 'claude-sonnet-5-5',
     name: 'Claude Sonnet 5.5',
     note: 'Quicker, at half the price: about 3¢ a short post, 31¢ a long essay.',
+    planNote: 'Quicker, and lighter on your plan’s limits.',
   },
   {
     id: 'claude-haiku-4-5',
     name: 'Claude Haiku 4.5',
     note: 'Quickest, at a quarter of the price, with rougher notes: about 2¢ a short post, 15¢ a long essay.',
+    planNote: 'Quickest and lightest on your plan, with rougher notes.',
   },
 ];
 export const DEFAULT_MODEL = MODELS[0].id;
