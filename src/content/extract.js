@@ -145,11 +145,44 @@ function freeHeadings(root) {
   }
 }
 
+// Some pages build lines of text from divs they show inline, like the links in
+// an X article. Readability takes a div for a block, and drops a block holding
+// only a link as clutter, so a div the page shows inline becomes a span in the
+// copy Spine reads.
+function inlineDivs(live, copy) {
+  const shown = live.getElementsByTagName('div');
+  const copies = copy.getElementsByTagName('div');
+  if (shown.length !== copies.length) return;
+  const inline = [...shown].flatMap((div, index) => (getComputedStyle(div).display === 'inline' ? [copies[index]] : []));
+  for (const div of inline) {
+    const span = div.ownerDocument.createElement('span');
+    span.append(...div.childNodes);
+    div.replaceWith(span);
+  }
+}
+
+function copyOf(element, into) {
+  const copy = into.importNode(element, true);
+  inlineDivs(element, copy);
+  return copy;
+}
+
 // Where some sites keep the article, for when Readability picks the wrong part
 // of the page: forums built on ForumMagnum (LessWrong and its siblings) put
-// long comment threads next to the post.
+// long comment threads next to the post. X shows an article inside the post's
+// conversation, with its cover, title and author outside the text; the text
+// comes clean, and Readability would drop its headings, whose class names say
+// "header", so Spine reads it as it is.
 const SITE_RULES = [
   { hosts: /(^|\.)(lesswrong\.com|alignmentforum\.org|forum\.effectivealtruism\.org|progressforum\.org)$/, selector: '#postContent, .PostsPage-postContent' },
+  {
+    hosts: /(^|\.)(x|twitter)\.com$/,
+    selector: '[data-testid="twitterArticleRichTextView"]',
+    cover: '[data-testid="twitterArticleReadView"] [data-testid="tweetPhoto"]',
+    title: '[data-testid="twitter-article-title"]',
+    byline: '[data-testid="User-Name"] a',
+    asIs: true,
+  },
 ];
 // Containers many sites put their article in, most specific first.
 const CONTAINERS = [
@@ -197,7 +230,7 @@ function readPart(doc, element) {
   const part = document.implementation.createHTMLDocument(doc.title);
   part.head.replaceWith(part.importNode(doc.head, true));
   const article = part.createElement('article');
-  article.append(part.importNode(element, true));
+  article.append(copyOf(element, part));
   part.body.append(article);
   wakeImages(part);
   freeHeadings(part);
@@ -206,7 +239,7 @@ function readPart(doc, element) {
     if (parsed?.content && paragraphWords(parsed.content) >= paragraphWords(element) * 0.6) return parsed;
   } catch {}
   // Readability cleaned away too much: keep the part as the page has it.
-  const raw = part.importNode(element, true);
+  const raw = copyOf(element, part);
   return { content: raw, title: doc.title };
 }
 
@@ -849,6 +882,7 @@ function hasContent(element) {
 // The article on this page, as { meta, blocks }, or null when there isn't one.
 export function extractArticle(doc = document, { force = false } = {}) {
   const clone = doc.cloneNode(true);
+  inlineDivs(doc, clone);
   clone.getElementById(HOST_ID)?.remove();
   wakeImages(clone);
   freeHeadings(clone);
@@ -864,8 +898,19 @@ export function extractArticle(doc = document, { force = false } = {}) {
   // Readability found little: read the article's own container instead.
   const rule = SITE_RULES.find(entry => entry.hosts.test(location.hostname));
   const ruled = rule && doc.querySelector(rule.selector);
-  if (ruled && paragraphWords(ruled) >= 150) {
-    parsed = { ...parsed, ...readPart(doc, ruled), byline: parsed?.byline, publishedTime: parsed?.publishedTime, siteName: parsed?.siteName };
+  if (ruled && wordCount(ruled.textContent) >= 150) {
+    const part = rule.asIs ? { content: copyOf(ruled, document) } : readPart(doc, ruled);
+    const cover = rule.cover && doc.querySelector(rule.cover);
+    if (cover && !ruled.contains(cover)) part.content.prepend(copyOf(cover, document));
+    const text = selector => selector && squash(doc.querySelector(selector)?.textContent ?? '');
+    parsed = {
+      ...parsed,
+      ...part,
+      title: text(rule.title) || part.title || parsed?.title,
+      byline: text(rule.byline) || parsed?.byline,
+      publishedTime: parsed?.publishedTime,
+      siteName: parsed?.siteName,
+    };
   } else if (!parsed?.content || paragraphWords(parsed.content) < 150) {
     const container = bestContainer(doc);
     if (container) parsed = { ...parsed, ...readPart(doc, container) };
