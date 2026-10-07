@@ -60,6 +60,7 @@ for (const site of SITES.filter(site => !only.length || only.includes(site.name)
         figures: shadow.querySelectorAll('.doc figure').length,
         brokenFigures: [...shadow.querySelectorAll('.doc figure')].filter(f => f.hidden).length,
         lists: shadow.querySelectorAll('[data-list]').length,
+        links: shadow.querySelectorAll('.doc a[href]').length,
         first: shadow.querySelector('.doc-body .tb')?.textContent.slice(0, 90) ?? '',
       };
     });
