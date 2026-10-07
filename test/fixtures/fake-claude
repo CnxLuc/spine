@@ -17,7 +17,19 @@ if os.environ.get("FAKE_CLAUDE_FAIL") == "limit":
     sys.exit(1)
 model = args[args.index("--model") + 1] if "--model" in args else ""
 schema = json.loads(args[args.index("--json-schema") + 1]) if "--json-schema" in args else None
-reply = json.dumps({"echo": user[:24], "model": model, "fields": sorted((schema or {}).get("properties", {}))})
+fields = sorted((schema or {}).get("properties", {}))
+reply = json.dumps({"echo": user[:24], "model": model, "fields": fields})
+# With FAKE_CLAUDE_READS=1, real-looking notes, so a read in the browser finishes.
+if os.environ.get("FAKE_CLAUDE_READS") == "1":
+    import re
+    if "keySentences" in fields:
+        ids = re.findall(r"\b(s\d+)(?: \[lead\])?: ", user)
+        reply = json.dumps({"keySentences": ids[::3], "collapseFolds": [], "sections": [], "chapters": []})
+    elif "groupings" in fields:
+        reply = json.dumps({"groupings": [], "carousels": []})
+    else:
+        runs = re.findall(r"^Run (\d+)$", user, re.M)
+        reply = json.dumps({"bridges": [{"run": int(run), "text": "And so the thread carries on."} for run in runs]})
 emit({"type": "stream_event", "event": {"type": "content_block_start", "content_block": {"type": "tool_use", "name": "StructuredOutput"}}})
 for at in range(0, len(reply), 7):
     emit({"type": "stream_event", "event": {"type": "content_block_delta", "delta": {"type": "input_json_delta", "partial_json": reply[at:at + 7]}}})

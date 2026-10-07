@@ -1,6 +1,6 @@
 // The reader: finds the article on the page, lays it out in the layer, and runs
 // the reading ideas on it. It owns the lens (how much of the text you see), the
-// notes Claude writes, and everything you can change while reading.
+// notes Claude or ChatGPT writes, and everything you can change while reading.
 import { extractArticle } from './extract.js';
 import { buildArticle } from './article.js';
 import { Layer } from './layer.js';
@@ -16,6 +16,7 @@ import {
 import { Outline, Rail, applyChapters } from './outline.js';
 import { Cards, Regroup } from './lists.js';
 import { Analysis } from './ai.js';
+import { MANAGE_USAGE, Onboard } from './onboard.js';
 import { giveConsent, loadPosition, loadSettings, saveSettings, savePosition } from './settings.js';
 import { canonicalUrl, minutes, squash } from './text.js';
 import { icon } from './icons.js';
@@ -36,6 +37,8 @@ const THEMES = [
   { id: 'dusk', label: 'Dusk', bg: '#1f1e1d', ink: '#efede5' },
   { id: 'night', label: 'Night', bg: '#000000', ink: '#dbd9d2' },
 ];
+// The plan a way of reading runs on.
+const planOf = engine => (engine === 'codex' || engine === 'chatgpt' ? 'ChatGPT' : 'Claude');
 const sameSet = (a, b) => a.size === b.size && [...a].every(value => b.has(value));
 const el = (tag, className, text) => {
   const element = document.createElement(tag);
@@ -74,6 +77,7 @@ export class Reader {
     layer.on('frame', (top, height, read) => this.onFrame(top, height, read));
     layer.on('panel', (name, panel) => this.fillPanel(name, panel));
     this.buildDock();
+    this.onboard = new Onboard(this);
   }
 
   async toggle() {
@@ -549,16 +553,16 @@ export class Reader {
     this.read(Boolean(this.ai.force));
   }
 
-  // Who reads, in words: Claude (through Claude Code or the API) or Codex; the
-  // tool on this computer; and the plan it runs on.
+  // Who reads, in words: Claude (through Claude Code or the API), ChatGPT or
+  // Codex; the tool that runs it; and the plan it runs on.
   get who() {
-    return this.cost?.engine === 'codex' ? 'Codex' : 'Claude';
+    return { codex: 'Codex', chatgpt: 'ChatGPT' }[this.cost?.engine] ?? 'Claude';
   }
   get tool() {
-    return this.cost?.engine === 'codex' ? 'Codex' : 'Claude Code';
+    return { codex: 'Codex', chatgpt: 'ChatGPT' }[this.cost?.engine] ?? 'Claude Code';
   }
   get plan() {
-    return this.cost?.engine === 'codex' ? 'ChatGPT' : 'Claude';
+    return planOf(this.cost?.engine);
   }
 
   // What reading this article costs, in words: on API credits, an estimate;
@@ -589,6 +593,8 @@ export class Reader {
     const status = this.layer.status;
     clearTimeout(this.statusTimer);
     const { state } = this.ai;
+    // Reading has started some other way: the choice is made.
+    if (this.onboard.mode && this.onboard.mode !== 'welcome' && state !== 'no-key') this.onboard.hide();
     const spark = `<span class="spark">${icon('sparkles')}</span>`;
     status.classList.remove('leaving', 'ask');
     const show = () => (status.hidden = false);
@@ -618,17 +624,35 @@ export class Reader {
     } else if (state === 'error') {
       status.innerHTML = `${spark}<span></span>`;
       status.querySelector('span:last-child').textContent = this.ai.message;
-      const retry = el('button', null, 'Try again');
-      retry.addEventListener('click', () => this.read(false));
-      status.append(retry);
+      if (this.ai.code === 'chatgpt-signin') {
+        const again = el('button', null, 'Continue with ChatGPT');
+        again.addEventListener('click', () => this.onboard.chatgpt());
+        status.append(again);
+      } else if (this.ai.code === 'chatgpt-plan') {
+        // A plan OpenAI doesn't share with apps, like ChatGPT Free.
+        const other = el('button', null, 'Choose another');
+        other.addEventListener('click', () => this.onboard.show('choose'));
+        status.append(other);
+      } else {
+        if (this.ai.code === 'limit' && this.cost?.engine === 'chatgpt') {
+          const manage = el('button', null, 'Manage usage');
+          manage.addEventListener('click', () => window.open(MANAGE_USAGE, '_blank', 'noopener'));
+          status.append(manage);
+        }
+        const retry = el('button', null, 'Try again');
+        retry.addEventListener('click', () => this.read(false));
+        status.append(retry);
+      }
       show();
     } else if (state === 'consent') {
       status.classList.add('ask');
       status.innerHTML = `${spark}<span></span>`;
       status.querySelector('span:last-child').textContent =
-        this.cost?.billing === 'plan'
-          ? `Read with ${this.who}? Spine asks ${this.tool} on this computer to read each article you open, on your ${this.plan} plan.`
-          : `Read with Claude? Each article you open is sent to Anthropic and billed to your API credits. This one: about ${money(this.cost?.estimate ?? 0)}.`;
+        this.cost?.engine === 'chatgpt'
+          ? 'Read with ChatGPT? Spine sends each article you open to ChatGPT, on your ChatGPT plan.'
+          : this.cost?.billing === 'plan'
+            ? `Read with ${this.who}? Spine asks ${this.tool} on this computer to read each article you open, on your ${this.plan} plan.`
+            : `Read with Claude? Each article you open is sent to Anthropic and billed to your API credits. This one: about ${money(this.cost?.estimate ?? 0)}.`;
       const yes = el('button', 'yes', `Read with ${this.who}`);
       yes.addEventListener('click', () => this.consent());
       const no = el('button', null, 'Not now');
@@ -652,12 +676,23 @@ export class Reader {
       status.append(yes, no);
       show();
     } else if (state === 'no-key') {
-      status.innerHTML = `${spark}<span>Connect Claude Code, Codex or an API key to bring the key sentences forward</span>`;
-      const open = el('button', null, 'Settings');
-      open.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'spine:options' }));
-      status.append(open);
-      show();
-      leave(9000);
+      // The card asks who reads; once the reader has said not now, a quieter
+      // line does, and goes.
+      status.hidden = true;
+      if (this.onboard.mode) return;
+      this.onboard.wanted().then(wanted => {
+        if (this.ai.state !== 'no-key' || this.onboard.mode) return;
+        if (wanted) {
+          this.onboard.show('choose');
+          return;
+        }
+        status.innerHTML = `${spark}<span>Choose who reads to bring the key sentences forward</span>`;
+        const choose = el('button', null, 'Choose');
+        choose.addEventListener('click', () => this.onboard.show('choose'));
+        status.append(choose);
+        show();
+        leave(9000);
+      });
     } else {
       status.hidden = true;
     }
@@ -1030,9 +1065,11 @@ export class Reader {
     if (state === 'consent') {
       strong(`Read this with ${this.who}?`);
       text.append(
-        this.cost?.billing === 'plan'
-          ? `When you open an article, Spine asks ${this.tool} on this computer to read it, so it can pick the key sentences and write the notes. It runs on your ${this.plan} plan and counts toward its usage limits. Spine sends nothing else, and never sees your sign-in. You can turn this off in settings.`
-          : `When you open an article, Spine sends its text to Anthropic’s API with your key, so Claude can pick the key sentences and write the notes. Anthropic bills it to your API credits, not a Claude.ai subscription: about ${money(this.cost?.estimate ?? 0)} for this one, once. It sends nothing else. You can turn this off in settings.`,
+        this.cost?.engine === 'chatgpt'
+          ? 'When you open an article, Spine sends its text to ChatGPT, so it can pick the key sentences and write the notes. It runs on your ChatGPT plan and counts toward its usage limits. Spine sends nothing else. You can turn this off in settings.'
+          : this.cost?.billing === 'plan'
+            ? `When you open an article, Spine asks ${this.tool} on this computer to read it, so it can pick the key sentences and write the notes. It runs on your ${this.plan} plan and counts toward its usage limits. Spine sends nothing else, and never sees your sign-in. You can turn this off in settings.`
+            : `When you open an article, Spine sends its text to Anthropic’s API with your key, so Claude can pick the key sentences and write the notes. Anthropic bills it to your API credits, not a Claude.ai subscription: about ${money(this.cost?.estimate ?? 0)} for this one, once. It sends nothing else. You can turn this off in settings.`,
       );
       button(`Read with ${this.who}`, true, () => this.consent());
       settingsButton();
@@ -1042,9 +1079,13 @@ export class Reader {
       button('Read it', true, () => this.read(Boolean(this.ai.force)));
       settingsButton();
     } else if (state === 'no-key') {
-      strong('Connect someone to read with');
-      text.append('Spine reads with Claude Code or Codex on this computer, on your own plan, or with an Anthropic API key. Set one up to bring the key sentences forward, fold the rest and write a note for each section.');
-      button('Set it up', true, () => chrome.runtime.sendMessage({ type: 'spine:options' }));
+      strong('Choose who reads');
+      text.append('Spine reads with ChatGPT or Claude Code, on a plan you already pay for, or with an Anthropic API key. Choose one to bring the key sentences forward, fold the rest and write a note for each section.');
+      button('Choose', true, () => {
+        this.layer.closePanels();
+        this.onboard.show('choose');
+      });
+      settingsButton();
     } else if (state === 'reading' || state === 'bridging') {
       strong(state === 'reading' ? `${this.who} is reading this piece` : 'Writing bridges');
       text.append('Key sentences light up as they’re chosen. You can keep reading.');
@@ -1068,16 +1109,18 @@ export class Reader {
       settingsButton();
     } else if (state === 'ready') {
       strong(this.ai.cached ? 'Notes saved from before' : 'Notes ready');
-      const model = String(this.ai.model ?? '')
-        .replace(/^codex$/, 'Codex')
-        .replace(/^claude-/, 'Claude ')
-        .replace(/-(\d)-(\d)$/, ' $1.$2')
-        .replace(/-/g, ' ')
-        .replace(/\b(opus|sonnet|haiku)\b/i, word => word[0].toUpperCase() + word.slice(1));
+      const named = String(this.ai.model ?? '');
+      const model = /^claude-/.test(named)
+        ? named
+            .replace(/^claude-/, 'Claude ')
+            .replace(/-(\d)-(\d)$/, ' $1.$2')
+            .replace(/-/g, ' ')
+            .replace(/\b(opus|sonnet|haiku)\b/i, word => word[0].toUpperCase() + word.slice(1))
+        : named.replace(/^codex$/, 'Codex');
       const when = this.ai.at ? new Date(this.ai.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
       const spent =
         this.ai.billing === 'plan'
-          ? `on your ${this.ai.engine === 'codex' ? 'ChatGPT' : 'Claude'} plan`
+          ? `on your ${planOf(this.ai.engine)} plan`
           : this.ai.cost
             ? `${money(this.ai.cost)} of API credits`
             : '';
@@ -1091,6 +1134,16 @@ export class Reader {
     }
     box.append(glyph, text);
     head.append(box, actions);
+    // OpenAI asks apps to show when they use a ChatGPT plan, and where to manage it.
+    if (this.cost?.engine === 'chatgpt' && state !== 'no-key') {
+      const line = el('p', 'plan-line', 'Using ChatGPT plan · ');
+      const manage = el('a', null, 'Manage usage');
+      manage.href = MANAGE_USAGE;
+      manage.target = '_blank';
+      manage.rel = 'noopener';
+      line.append(manage);
+      head.append(line);
+    }
 
     const ideas = el('section');
     ideas.append(el('h3', null, 'Reading ideas'));

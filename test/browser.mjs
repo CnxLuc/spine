@@ -63,7 +63,7 @@ export async function launch({ headless = true, width = 1440, height = 900, dark
   context.on('page', page => {
     if (page.url().startsWith('chrome-extension://')) page.close().catch(() => {});
   });
-  return { context, worker, id };
+  return { context, worker, id, profile };
 }
 
 export async function setStorage(worker, area, values) {

@@ -3,6 +3,7 @@
 import { DEFAULTS, giveConsent, hasConsent, withdrawConsent } from '../content/settings.js';
 import { DEFAULT_MODEL, MODELS } from '../shared/prompts.js';
 import { money } from '../shared/pricing.js';
+import { CHATGPT_LOGO } from '../shared/brands.js';
 
 const $ = id => document.getElementById(id);
 
@@ -50,16 +51,16 @@ const base = $('baseURL');
 base.value = local.baseURL ?? '';
 base.addEventListener('change', () => chrome.storage.local.set({ baseURL: base.value.trim() }));
 
-// Who reads: Claude Code or Codex on this computer, on the reader's own plan,
-// or an Anthropic API key. Unless the reader picks, Spine uses Claude Code, then
-// Codex, whichever is connected and signed in.
+// Who reads: ChatGPT, signed in here, or Claude Code or Codex on this computer,
+// on the reader's own plan; or an Anthropic API key. Unless the reader picks,
+// Spine uses Claude Code, ChatGPT, then Codex, whichever is ready.
 const setup = $('local-setup');
 function showEngine(kind) {
   for (const input of document.querySelectorAll('input[name="engine"]')) input.checked = input.value === kind;
   $('api-settings').hidden = kind !== 'api';
   // On a plan, models differ in how much of its limits they use, not in price.
   for (const note of document.querySelectorAll('.model small')) note.textContent = note.dataset[kind === 'api' ? 'api' : 'plan'];
-  $('models-field').hidden = kind === 'codex';
+  $('models-field').hidden = kind === 'codex' || kind === 'chatgpt';
   $('codex-model').hidden = kind !== 'codex';
   $('auto-hint').textContent =
     kind === 'api' ? 'Turn this off to choose which articles to spend API credits on.' : 'Turn this off to choose which articles are read.';
@@ -92,9 +93,49 @@ async function checkLocal(fresh = false) {
     for (const id of ['claude-status', 'codex-status']) $(id).textContent = text;
     setup.hidden = false;
   }
+  showChatGPT(state.chatgpt ?? {});
   showEngine(state.kind);
   return state;
 }
+
+// ChatGPT: the account, its models, and where to manage its usage.
+$('chatgpt-sign-in').insertAdjacentHTML('afterbegin', CHATGPT_LOGO);
+async function showChatGPT(account) {
+  const status = $('chatgpt-status');
+  status.className = `engine-status${account.signedIn ? ' ok' : ''}`;
+  status.textContent = account.signedIn
+    ? `Signed in${account.email ? ` as ${account.email}` : ''}. Using your ChatGPT plan.`
+    : 'Not signed in yet.';
+  $('chatgpt-sign-in').hidden = account.signedIn;
+  $('chatgpt-account').hidden = !account.signedIn;
+  if (!account.signedIn) return;
+  const models = await chrome.runtime.sendMessage({ type: 'spine:chatgpt-models' });
+  const select = $('chatgpt-model');
+  select.replaceChildren(...(models ?? []).map(model => new Option(model.name, model.slug)));
+  if (models?.some(model => model.slug === account.model)) select.value = account.model;
+}
+$('chatgpt-model').addEventListener('change', event => chrome.storage.local.set({ chatgptModel: event.target.value }));
+$('chatgpt-sign-in').addEventListener('click', async () => {
+  const status = $('chatgpt-status');
+  status.className = 'engine-status';
+  status.textContent = 'Finish signing in in the window that opened.';
+  const reply = await chrome.runtime.sendMessage({ type: 'spine:sign-in' });
+  if (!reply?.started) status.textContent = reply?.message ?? 'Spine couldn’t open the ChatGPT sign-in.';
+});
+chrome.runtime.onMessage.addListener(message => {
+  if (message?.type !== 'spine:connected' || message.engine !== 'chatgpt') return;
+  if (message.ok) checkLocal();
+  else {
+    $('chatgpt-status').className = 'engine-status warn';
+    $('chatgpt-status').textContent = message.message;
+  }
+});
+$('chatgpt-sign-out').addEventListener('click', async () => {
+  await chrome.runtime.sendMessage({ type: 'spine:sign-out' });
+  const { engine } = await chrome.storage.local.get('engine');
+  if (engine === 'chatgpt') await chrome.storage.local.set({ engine: 'auto' });
+  checkLocal();
+});
 for (const input of document.querySelectorAll('input[name="engine"]')) {
   input.addEventListener('change', () => {
     chrome.storage.local.set({ engine: input.value });
@@ -107,7 +148,7 @@ $('copy-command').addEventListener('click', async () => {
   $('copy-command').textContent = 'Copied';
   setTimeout(() => ($('copy-command').textContent = 'Copy'), 1500);
 });
-showEngine(['api', 'codex'].includes(local.engine) ? local.engine : 'claude-code');
+showEngine(['api', 'codex', 'chatgpt'].includes(local.engine) ? local.engine : 'claude-code');
 checkLocal();
 
 $('test').addEventListener('click', async () => {

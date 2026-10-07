@@ -21,6 +21,22 @@
         <p class="lede">An AI reads each article once: it picks the key sentences, writes a short note for each section and a line for each fold. Spine saves the notes in this browser, so opening an article again is free.</p>
 
         <div class="engines" role="radiogroup" aria-label="How Spine reads">
+          <label class="engine" data-engine="chatgpt">
+            <input type="radio" name="engine" value="chatgpt" />
+            <span class="engine-body">
+              <b>ChatGPT</b>
+              <small>Reads on your ChatGPT Plus or Pro plan, with nothing extra to pay. It counts toward your plan’s usage limits.</small>
+              <span class="engine-status" id="chatgpt-status" role="status">Checking…</span>
+            </span>
+          </label>
+          <div class="setup chatgpt-setup" id="chatgpt-setup">
+            <button type="button" class="siwc" id="chatgpt-sign-in"><span>Continue with ChatGPT</span></button>
+            <span class="setup-actions" id="chatgpt-account" hidden>
+              <label class="chatgpt-model">Model <select id="chatgpt-model"></select></label>
+              <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noopener">Manage usage</a>
+              <button type="button" id="chatgpt-sign-out" class="ghost">Sign out</button>
+            </span>
+          </div>
           <label class="engine" data-engine="claude-code">
             <input type="radio" name="engine" value="claude-code" />
             <span class="engine-body">
@@ -57,7 +73,7 @@
         <div id="api-settings">
           <div class="billing">
             <h3>Spine uses your own Anthropic API credits</h3>
-            <p>Claude’s reading is billed by Anthropic to the API account your key belongs to, at Anthropic’s prices. API credits are bought separately from a Claude.ai Pro or Max subscription; to read on a subscription, use Claude Code or Codex above.</p>
+            <p>Claude’s reading is billed by Anthropic to the API account your key belongs to, at Anthropic’s prices. API credits are bought separately from a Claude.ai Pro or Max subscription; to read on a subscription, use ChatGPT or Claude Code above.</p>
             <table>
               <tr><th>Model</th><th>Short post, 3 min</th><th>Long essay, 50 min</th></tr>
               <tr><td>Claude Opus 5.5</td><td>about 6¢</td><td>about 62¢</td></tr>
@@ -103,7 +119,7 @@
         <p class="codex-model" id="codex-model" hidden>Codex reads with the default model for your ChatGPT plan.</p>
         <label class="toggle consent">
           <input type="checkbox" id="consent" />
-          <span><b>Send the articles I open to be read</b><small>Spine sends each article’s text to Claude Code, Codex or Anthropic’s API, whichever you chose above, so it can write the notes. Nothing else leaves your browser. Turn this off and Spine asks before reading again.</small></span>
+          <span><b>Send the articles I open to be read</b><small>Spine sends each article’s text to ChatGPT, Claude Code, Codex or Anthropic’s API, whichever you chose above, so it can write the notes. Nothing else leaves your browser. Turn this off and Spine asks before reading again.</small></span>
         </label>
       </section>
 

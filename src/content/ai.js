@@ -1,4 +1,4 @@
-// Reading an article with Claude, as three requests through the background
+// Reading an article with Claude or ChatGPT, as three requests through the background
 // worker:
 //
 // 1. notes: the key sentences, the ones that fold anyway, and a note for each
@@ -67,7 +67,7 @@ function ask(kind, payload, onText, signal) {
         try {
           resolve({ json: JSON.parse(message.text || text), model: message.model, usage: message.usage });
         } catch {
-          reject(Object.assign(new Error('Claude’s notes came back incomplete. Try again.'), { code: 'parse' }));
+          reject(Object.assign(new Error('The notes came back incomplete. Try again.'), { code: 'parse' }));
         }
       } else if (message.type === 'error') {
         finish();
@@ -77,7 +77,7 @@ function ask(kind, payload, onText, signal) {
     port.onDisconnect.addListener(() => {
       if (settled) return;
       finish();
-      reject(Object.assign(new Error('The connection to Claude closed. Try again.'), { code: 'disconnected' }));
+      reject(Object.assign(new Error('The connection closed before the notes arrived. Try again.'), { code: 'disconnected' }));
     });
     port.postMessage({ type: 'run', kind, payload });
   });

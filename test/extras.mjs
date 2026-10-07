@@ -232,7 +232,7 @@ const ready = async page => {
     assert.match(text, /3 articles read/);
     assert.match(text, /About 47¢ of API credits so far/);
     const billing = await page.textContent('.billing');
-    assert.match(billing, /bought separately from a Claude\.ai Pro or Max subscription; to read on a subscription, use Claude Code or Codex/);
+    assert.match(billing, /bought separately from a Claude\.ai Pro or Max subscription; to read on a subscription, use ChatGPT or Claude Code/);
   });
   await page.screenshot({ path: 'test/out/options-billing.png', fullPage: true });
   await context.close();

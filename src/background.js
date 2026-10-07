@@ -1,10 +1,11 @@
 // Spine's background worker. It opens and closes the reader on a tab, and it is
-// the only place that talks to Claude: the reader sends what it needs over a
-// port, and the worker streams the reply back. The API key stays here, in the
-// extension's storage, and never reaches a page.
+// the only place that talks to whoever reads: the reader sends what it needs
+// over a port, and the worker streams the reply back. Keys and sign-ins stay
+// here, in the extension's storage, and never reach a page.
 import Anthropic from '@anthropic-ai/sdk';
 import { DEFAULT_MODEL, INPUTS, SCHEMAS, SYSTEMS } from './shared/prompts.js';
 import { ICONS } from './shared/lucide-icons.js';
+import * as chatgpt from './chatgpt.js';
 
 // Opening Spine on a tab: ask the reader there to toggle, and if no reader is
 // listening yet, add it first.
@@ -64,8 +65,28 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     return true;
   } else if (message?.type === 'spine:engine') {
     settings()
-      .then(async config => reply({ choice: config.engine, ...(await engine(config, { fresh: Boolean(message.fresh) })) }))
+      .then(async config =>
+        reply({
+          choice: config.engine,
+          ...(await engine(config, { fresh: Boolean(message.fresh) })),
+          chatgpt: { ...(await chatgpt.status()), model: config.chatgptModel },
+        }),
+      )
       .catch(error => reply({ error: String(error) }));
+    return true;
+  } else if (message?.type === 'spine:sign-in') {
+    // The answer comes later, as 'spine:connected', when the window closes.
+    const from = sender.tab ? { tabId: sender.tab.id, windowId: sender.tab.windowId } : null;
+    chatgpt.signIn(from).then(
+      () => reply({ started: true }),
+      error => reply({ started: false, message: error.message }),
+    );
+    return true;
+  } else if (message?.type === 'spine:sign-out') {
+    chatgpt.signOut().then(() => reply({ ok: true }));
+    return true;
+  } else if (message?.type === 'spine:chatgpt-models') {
+    chatgpt.models({ fresh: Boolean(message.fresh) }).then(reply, () => reply([]));
     return true;
   } else if (message?.type === 'spine:test-key') {
     testKey(message).then(reply);
@@ -75,13 +96,14 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
 });
 
 async function settings() {
-  const { apiKey = '', baseURL = '', model = DEFAULT_MODEL, engine = 'auto' } = await chrome.storage.local.get([
-    'apiKey',
-    'baseURL',
-    'model',
-    'engine',
-  ]);
-  return { apiKey: apiKey.trim(), baseURL: baseURL.trim(), model, engine };
+  const {
+    apiKey = '',
+    baseURL = '',
+    model = DEFAULT_MODEL,
+    engine = 'auto',
+    chatgptModel = '',
+  } = await chrome.storage.local.get(['apiKey', 'baseURL', 'model', 'engine', 'chatgptModel']);
+  return { apiKey: apiKey.trim(), baseURL: baseURL.trim(), model, engine, chatgptModel };
 }
 
 // Claude Code or Codex on this computer, reached through Spine's native
@@ -129,23 +151,27 @@ async function local({ fresh = false } = {}) {
 }
 
 // Which way Spine reads: the one the reader chose, or by default Claude Code,
-// then Codex, when it's here and signed in; otherwise the Anthropic API key.
+// ChatGPT, then Codex, whichever is connected and signed in; otherwise the
+// Anthropic API key.
 async function engine(config, options) {
-  const here = config.engine === 'api' ? null : await local(options);
+  const signedIn = async () => (await chatgpt.status()).signedIn;
+  const keyed = Boolean(config.apiKey || config.baseURL);
+  if (config.engine === 'chatgpt') return { kind: 'chatgpt', ready: await signedIn(), local: null };
+  if (config.engine === 'api') return { kind: 'api', ready: keyed, local: null };
+  const here = await local(options);
   const ready = kind => Boolean(here?.[TOOLS[kind]]?.signedIn);
-  const kind =
-    config.engine === 'claude-code' || config.engine === 'codex'
-      ? config.engine
-      : config.engine === 'auto' && ready('claude-code')
-        ? 'claude-code'
-        : config.engine === 'auto' && ready('codex')
-          ? 'codex'
-          : 'api';
-  if (kind === 'api') return { kind, ready: Boolean(config.apiKey || config.baseURL), local: here };
-  return { kind, ready: ready(kind), local: here };
+  if (config.engine === 'claude-code' || config.engine === 'codex') return { kind: config.engine, ready: ready(config.engine), local: here };
+  if (ready('claude-code')) return { kind: 'claude-code', ready: true, local: here };
+  if (await signedIn()) return { kind: 'chatgpt', ready: true, local: here };
+  if (ready('codex')) return { kind: 'codex', ready: true, local: here };
+  return { kind: 'api', ready: keyed, local: here };
 }
 
 const NAMES = { 'claude-code': 'Claude Code', codex: 'Codex' };
+
+// Codex and ChatGPT answer in one go or stream quickly; they read the notes
+// carefully and the rest quickly.
+const effortFor = request => (request === 'notes' ? 'medium' : 'low');
 
 function client({ apiKey, baseURL }) {
   return new Anthropic({
@@ -204,8 +230,7 @@ function readLocally(port, signal, kind, request, payload, model) {
     type: 'run',
     engine: TOOLS[kind],
     model,
-    // Codex answers in one go; it reads the notes carefully and the rest quickly.
-    effort: kind === 'codex' && request !== 'notes' ? 'low' : 'medium',
+    effort: kind === 'codex' ? effortFor(request) : 'medium',
     system: SYSTEMS[request],
     user: inputFor(request, payload),
     schema: SCHEMAS[request],
@@ -271,6 +296,21 @@ chrome.runtime.onConnect.addListener(port => {
     const config = await settings();
     const way = await engine(config);
     const model = message.model || config.model;
+    if (way.kind === 'chatgpt') {
+      if (!way.ready) {
+        port.postMessage({ type: 'error', code: 'chatgpt-signin', message: 'Sign in to ChatGPT to keep reading.' });
+        return;
+      }
+      chatgpt.read(port, controller.signal, {
+        request: message.kind,
+        system: SYSTEMS[message.kind],
+        user: inputFor(message.kind, message.payload),
+        schema: SCHEMAS[message.kind],
+        effort: effortFor(message.kind),
+        model: config.chatgptModel,
+      });
+      return;
+    }
     if (way.kind !== 'api') {
       const name = NAMES[way.kind];
       if (!way.ready) {

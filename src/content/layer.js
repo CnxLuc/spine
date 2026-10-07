@@ -72,6 +72,7 @@ export class Layer {
       <div class="rail-note" aria-hidden="true"></div>
       <main class="scroller" tabindex="-1"></main>
       <div class="dock">
+        <div class="who-card" role="region" aria-label="Who reads" aria-live="polite" hidden></div>
         <div class="status" role="status" hidden></div>
         <div class="lens" role="radiogroup" aria-label="How much to show">
           <span class="lens-thumb" aria-hidden="true"></span>
@@ -95,6 +96,7 @@ export class Layer {
     this.lensGroup = $('.lens');
     this.lensThumb = $('.lens-thumb');
     this.status = $('.status');
+    this.card = $('.who-card');
     this.toastEl = $('.toast');
     this.lightbox = $('.lightbox');
     this.help = $('.help');

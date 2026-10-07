@@ -1,6 +1,6 @@
 # Spine
 
-Spine is a reading layer for long writing, in Aside or any Chromium browser. It turns an article into a calm reader view, keeps its images, and uses Claude or Codex to find the sentences that carry the piece. You choose how much of the text you see: all of it, the key sentences with the rest folded away, or a short note for each section.
+Spine is a reading layer for long writing, in Aside or any Chromium browser. It turns an article into a calm reader view, keeps its images, and uses ChatGPT or Claude to find the sentences that carry the piece. You choose how much of the text you see: all of it, the key sentences with the rest folded away, or a short note for each section.
 
 The reading ideas come from Tareq Ismail’s [Reading Long Form prototype](https://github.com/onepixelaway/interfaces-that-think/tree/main/reading-long-form), episode 2 of [Interfaces that think](https://tareqistyping.com/interfaces-that-think/). Spine takes them from one essay to any article on the web.
 
@@ -12,7 +12,7 @@ Download [spine.zip](https://github.com/CnxLuc/spine/releases/latest/download/sp
 2. Type `chrome://extensions` in your browser’s address bar and turn on Developer mode, top right.
 3. Select Load unpacked and choose the unzipped `spine` folder. Keep the folder: your browser loads Spine from it.
 
-Spine works in Chrome, Arc, Brave, Edge, Dia and Aside. Spine’s settings open when you install it: choose who reads there (see [Choose who reads](#choose-who-reads)). A Chrome Web Store listing is on its way; it will update Spine for you.
+Spine works in Chrome, Arc, Brave, Edge, Dia and Aside. Open it on any article and it asks who reads (see [Choose who reads](#choose-who-reads)). A Chrome Web Store listing is on its way; it will update Spine for you.
 
 Read more at [cnxluc.github.io/spine](https://cnxluc.github.io/spine/).
 
@@ -20,7 +20,7 @@ Read more at [cnxluc.github.io/spine](https://cnxluc.github.io/spine/).
 
 Press ⌥⇧S on any article, or use Spine’s toolbar button, or right-click the page and choose Read with Spine. Press Esc to close it. The page underneath stays as it was.
 
-Spine opens straight away with the article as plain, readable text. Claude or Codex then reads it once, which takes 15 to 60 seconds, and the key sentences light up as they are chosen. The notes are saved in your browser, so opening the article again is instant and free.
+Spine opens straight away with the article as plain, readable text. ChatGPT or Claude then reads it once, which takes 15 to 60 seconds, and the key sentences light up as they are chosen. The notes are saved in your browser, so opening the article again is instant and free.
 
 ## Choose how much of the text to see
 
@@ -65,11 +65,17 @@ Above a list that could be grouped differently, a sentence names how the author 
 
 ## Choose who reads
 
-Spine reads with one of these. Without any, it still works as a reader view.
+The first time you open Spine on an article, it asks who should read it, right in the reader: ChatGPT or Claude Code, on a plan you already pay for. Choose one and reading starts as soon as it’s connected. You can also choose in Spine’s settings, or use an Anthropic API key. Without any, Spine still works as a reader view.
+
+### ChatGPT, on your Plus or Pro plan
+
+Select Continue with ChatGPT. A small window opens where you allow Spine to use your ChatGPT plan, and Spine starts reading as soon as you’re back. There is nothing to install, on any computer. Reading counts toward your plan’s usage limits; see or cap Spine’s share in [your ChatGPT usage settings](https://chatgpt.com/settings/usage).
+
+Spine uses OpenAI’s [Sign in with ChatGPT for open-source apps](https://developers.openai.com/siwc/token-sharing-open-source). OpenAI sends the sign-in window back to an address on your own computer, 127.0.0.1, which Spine watches for, so nothing has to listen there. Spine keeps the sign-in in its own storage in your browser, which websites and the script Spine adds to them can’t read, and sends it only to OpenAI. To sign out, select Sign out in Spine’s settings, or disconnect Spine in your ChatGPT settings.
 
 ### Claude Code or Codex, on your own plan
 
-If you use [Claude Code](https://claude.com/claude-code) or [Codex](https://developers.openai.com/codex), Spine can read with it, on your Claude or ChatGPT plan, with nothing extra to pay. Reading counts toward your plan’s usage limits, like any other use.
+If you use [Claude Code](https://claude.com/claude-code) or [Codex](https://developers.openai.com/codex), Spine can read with it, on your Claude or ChatGPT plan, with nothing extra to pay. Reading counts toward your plan’s usage limits, like any other use. Select Use Claude Code and Spine shows you the command below, then starts reading as soon as it’s connected.
 
 1. Make sure Claude Code or Codex is installed and signed in: run `claude` or `codex` once in Terminal.
 2. Connect Spine to it with one command, on macOS or Linux:
@@ -82,7 +88,7 @@ If you use [Claude Code](https://claude.com/claude-code) or [Codex](https://deve
 
 The command installs a small program, `native/spine_host.py`, and registers it with every Chromium browser on your computer. Your browser starts it when Spine asks for a reading, and only Spine may start it. It runs your own, unmodified `claude -p` or `codex exec`, signed in as you, then exits. Spine never sees or stores your Claude or ChatGPT sign-in, and nothing runs in the background. To remove it, run the same command with `bash -s -- --uninstall`.
 
-When both are connected, Spine uses Claude Code unless you choose Codex in settings.
+When several are ready, Spine uses Claude Code, then ChatGPT, then Codex, unless you choose in settings.
 
 ### An Anthropic API key
 
@@ -94,18 +100,18 @@ Claude’s reading is billed by Anthropic to your own API credits, which you buy
 
 ## What leaves your browser
 
-Nothing, until you agree to have articles read. Spine asks once, before it sends anything. Then it sends the text of each article you open to whichever reader you chose: Claude Code or Codex on your computer, which send it on to Anthropic or OpenAI under your plan, or Anthropic’s API with your key. Spine keeps the notes in your browser. Your key stays in Spine’s extension storage and is only sent to Anthropic. You can turn this off in Spine’s settings. Read the [privacy policy](https://cnxluc.github.io/spine/privacy.html).
+Nothing, until you agree to have articles read. Spine asks once, before it sends anything. Then it sends the text of each article you open to whichever reader you chose: OpenAI’s API under your ChatGPT plan, Claude Code or Codex on your computer, which send it on to Anthropic or OpenAI under your plan, or Anthropic’s API with your key. Choosing a reader in the first-run card is that agreement: the card says what Spine sends. Spine keeps the notes in your browser. Your key and your ChatGPT sign-in stay in Spine’s extension storage and are only sent to Anthropic and OpenAI. You can turn this off in Spine’s settings. Read the [privacy policy](https://cnxluc.github.io/spine/privacy.html).
 
 ## How Spine works
 
 1. Spine finds the article with Mozilla’s Readability, then rebuilds it from an allowlist of elements, so nothing from the page runs and every article arrives in the same shape.
 2. It splits each paragraph, list item and quotation into sentences, and numbers them.
-3. It asks for notes in 3 requests, through Claude Code, Codex or the API. The first streams the key sentences, the supercut and the section notes. The second, run at the same time, finds other groupings for lists. The third writes the bridges for the folds as soon as the key sentences are settled, split into up to 3 parallel requests.
+3. It asks for notes in 3 requests, through ChatGPT, Claude Code, Codex or the API. The first streams the key sentences, the supercut and the section notes. The second, run at the same time, finds other groupings for lists. The third writes the bridges for the folds as soon as the key sentences are settled, split into up to 3 parallel requests.
 4. It checks every note against the article and drops anything that does not fit, then saves the notes with a fingerprint of the article’s sentences.
 
 Each lens then only changes classes on the numbered sentences, which is why switching is instant.
 
-Through the API, requests to Claude Opus 5.5 and Sonnet 5.5 use adaptive thinking at medium effort, and server-side fallback if Claude’s safeguards decline an article. Through Claude Code they run as `claude -p` at medium effort, with no tools; through Codex as `codex exec` in a read-only sandbox, ignoring your own Codex settings so it uses your plan’s default model.
+Through ChatGPT, requests go to OpenAI’s Responses API with structured outputs, using the first model your plan lists unless you choose another in settings, at medium reasoning effort for the notes and low for the rest. Through the API, requests to Claude Opus 5.5 and Sonnet 5.5 use adaptive thinking at medium effort, and server-side fallback if Claude’s safeguards decline an article. Through Claude Code they run as `claude -p` at medium effort, with no tools; through Codex as `codex exec` in a read-only sandbox, ignoring your own Codex settings so it uses your plan’s default model.
 
 ## Build and test Spine
 
@@ -128,6 +134,7 @@ node test/look.mjs <url> [name]        # screenshots of Spine on a page
 node test/ai.mjs <url> [name] [--engine=claude-code|codex]   # reads a page with your Claude Code or Codex
 node --test test/native.test.mjs       # the connector, against fake claude and codex
 node test/local-check.mjs              # Spine finding Claude Code and Codex
+node test/onboard.mjs                  # the first-run card and ChatGPT sign-in, against a stand-in for OpenAI
 node test/tour.mjs <url> [name]        # each lens, panel and theme, as screenshots
 node test/interact.mjs                 # keyboard, hover, rail and resume checks
 node test/extras.mjs                   # narrow window, lightbox and copying
@@ -148,6 +155,8 @@ Never load `.test-build/` in your own browser: it can open Spine on any page wit
 | `src/content/ai.js` | The 3 requests, applied as they stream, and saving |
 | `src/content/notes.js` | Checks Claude’s notes against the article |
 | `src/content/styles.css` | Every colour, font and timing |
+| `src/chatgpt.js` | Sign in with ChatGPT, and reading on a ChatGPT plan |
+| `src/content/onboard.js` | The card that asks who reads, the first time |
 | `native/spine_host.py` | The connector your browser starts to run Claude Code or Codex |
 | `tools/connect.sh` | The installer for the connector; the build puts it on the website |
 | `docs/` | The website, with the privacy policy, served by GitHub Pages |

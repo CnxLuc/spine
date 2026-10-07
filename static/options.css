@@ -480,3 +480,66 @@ select {
 .codex-model[hidden] {
   display: none;
 }
+
+/* ChatGPT: OpenAI's approved Continue with ChatGPT button, black, or white on
+   a dark page, and the account once signed in. */
+.chatgpt-setup {
+  margin: -2px 0 2px;
+  padding: 0 16px 4px 44px;
+}
+.siwc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  justify-self: start;
+  width: 242px;
+  max-width: 100%;
+  height: 45px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 12px;
+  background: #000;
+  color: #fff;
+  font:
+    500 15px/18px Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+.siwc[hidden] {
+  display: none;
+}
+.siwc .chatgpt-logo {
+  flex: none;
+}
+@media (prefers-color-scheme: dark) {
+  .siwc {
+    background: #fff;
+    color: #000;
+  }
+}
+#chatgpt-account {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 13px;
+}
+#chatgpt-account[hidden] {
+  display: none;
+}
+#chatgpt-account a {
+  color: var(--ink);
+}
+.chatgpt-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+}
+.chatgpt-model select {
+  padding: 5px 8px;
+  font-size: 13px;
+}

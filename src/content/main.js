@@ -52,6 +52,8 @@ if (!globalThis.__spineReader) {
         );
       return true;
     }
+    // The ChatGPT sign-in this reader started has finished.
+    if (message?.type === 'spine:connected') reader.onboard.connected(message);
     return false;
   });
   if (SPINE_TEST) globalThis.__spineTest = reader;

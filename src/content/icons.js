@@ -23,6 +23,9 @@ const UI = {
   'list-checks': ICONS['list-checks'],
   key: ICONS.key,
   'book-open': ICONS['book-open'],
+  terminal: '<path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>',
+  'loader-circle': '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
 };
 
 export function icon(name, className = 'icon') {
