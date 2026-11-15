@@ -54,7 +54,7 @@ for (const [name, options] of [
     });
     await check('the try-it link opens a long essay in a new tab', async () => {
       const link = await page.evaluate(() => ({ href: document.getElementById('try').href, target: document.getElementById('try').target }));
-      assert.deepEqual(link, { href: 'https://paulgraham.com/greatwork.html', target: '_blank' });
+      assert.deepEqual(link, { href: 'https://paulgraham.com/superlinear.html', target: '_blank' });
     });
   }
   await context.close();

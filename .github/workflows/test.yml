@@ -1,0 +1,21 @@
+# The unit tests, including the connector and its installer, on Linux and on
+# a Mac, so the bash connector is checked against GNU and BSD tools alike.
+name: Tests
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - run: node build.mjs
+      - run: node --test test/*.test.mjs
