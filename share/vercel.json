@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "outputDirectory": "public",
+  "regions": ["lhr1"],
+  "redirects": [{ "source": "/", "destination": "https://cnxluc.github.io/spine/", "permanent": false }],
+  "rewrites": [{ "source": "/:id([A-Za-z0-9]{8})", "destination": "/api/share?page=:id" }],
+  "headers": [
+    {
+      "source": "/reader/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
+      ]
+    }
+  ]
+}

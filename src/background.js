@@ -6,6 +6,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { DEFAULT_MODEL, INPUTS, SCHEMAS, SYSTEMS } from './shared/prompts.js';
 import { ICONS } from './shared/lucide-icons.js';
 import * as chatgpt from './chatgpt.js';
+import * as shares from './shares.js';
 
 // Opening Spine on a tab: ask the reader there to toggle, and if no reader is
 // listening yet, add it first.
@@ -90,6 +91,18 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     return true;
   } else if (message?.type === 'spine:test-key') {
     testKey(message).then(reply);
+    return true;
+  } else if (message?.type === 'spine:share-status') {
+    shares.status(message.key).then(reply, () => reply({ ready: false, link: null }));
+    return true;
+  } else if (message?.type === 'spine:share') {
+    shares.share(message).then(reply, error => reply({ ok: false, message: error.message }));
+    return true;
+  } else if (message?.type === 'spine:unshare') {
+    shares.unshare(message.key).then(reply, error => reply({ ok: false, message: error.message }));
+    return true;
+  } else if (message?.type === 'spine:share-test') {
+    shares.test(message).then(reply, error => reply({ ok: false, message: error.message }));
     return true;
   }
   return false;

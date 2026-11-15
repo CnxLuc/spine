@@ -12,9 +12,9 @@
     <main class="page prose">
       <a class="home" href="./"><img src="assets/icon-128.png" alt="" width="28" height="28" /> Spine</a>
       <h1>Privacy policy</h1>
-      <p class="updated">Last updated 7 October 2026, for ChatGPT</p>
+      <p class="updated">Last updated 15 November 2026, for share links</p>
 
-      <p class="lead">Spine collects no data for its developer. It has no servers, no analytics and no tracking. When you agree to have articles read, Spine sends the text of the articles you open to the reader you chose: ChatGPT, your own Claude Code or Codex, or Anthropic’s API with your key.</p>
+      <p class="lead">Spine collects no data for its developer. It has no analytics and no tracking, and no server of its own apart from one that publishes share links, which only works with a key. When you agree to have articles read, Spine sends the text of the articles you open to the reader you chose: ChatGPT, your own Claude Code or Codex, or Anthropic’s API with your key.</p>
 
       <h2>What Spine sends, and where</h2>
       <p>When you open Spine on a page, and you have agreed to have articles read, Spine sends:</p>
@@ -35,6 +35,16 @@
       <p>Spine sends each article once. It saves the notes in your browser, so opening the article again sends nothing.</p>
       <p>If you change Spine’s API address in its settings, Spine sends API requests to that address instead.</p>
 
+      <h2>Share links</h2>
+      <p>Share links are off unless you add a share key in Spine’s settings. When you select Share a link, Spine sends the share server:</p>
+      <ul>
+        <li>the article as Spine shows it: its text, headings, lists, links and image addresses, with its title, author, site and address</li>
+        <li>the notes written for it, and which model wrote them and when</li>
+      </ul>
+      <p>The server publishes them at a short address. Anyone with the link can read the article there, in Spine’s reader, without Spine. The page asks search engines not to list it. The server keeps the article and its notes until you select Stop sharing; the link then stops working within 2 minutes.</p>
+      <p>Spine’s own share server runs on Vercel, which keeps standard request logs. If you set a different share server in Spine’s settings, Spine sends shares there instead.</p>
+      <p>A shared page keeps the settings and place of whoever reads it in that browser’s storage for the page. It loads images and site icons from the article’s own website.</p>
+
       <h2>What Spine keeps in your browser</h2>
       <ul>
         <li>your Anthropic API key, in Spine’s extension storage on this device</li>
@@ -42,8 +52,9 @@
         <li>the notes written for the last 400 articles you read, and your place in each</li>
         <li>which reader you chose, whether you agreed to have articles read, and when</li>
         <li>your settings, such as theme and text size, which your browser may sync to your other devices if you use its sync</li>
+        <li>your share key, if you added one, and the link for each article you shared</li>
       </ul>
-      <p>None of this leaves your browser, apart from your settings through your browser’s sync, your key sent to Anthropic and your ChatGPT sign-in sent to OpenAI, as described above.</p>
+      <p>None of this leaves your browser, apart from your settings through your browser’s sync, your key sent to Anthropic, your ChatGPT sign-in sent to OpenAI and your share key sent to the share server, as described above.</p>
 
       <h2>Other things Spine does when you ask</h2>
       <ul>
@@ -66,6 +77,7 @@
         <li>To stop reading with ChatGPT, select Sign out in Spine’s settings, or disconnect Spine in your ChatGPT settings.</li>
         <li>To remove the connector for Claude Code and Codex, run its installer again with <code>--uninstall</code>.</li>
         <li>To delete saved notes and reading places, select Clear saved notes in Spine’s settings.</li>
+        <li>To delete a share link and the copy behind it, select Stop sharing in the reader’s share menu.</li>
         <li>To delete everything Spine keeps, remove Spine from your browser.</li>
       </ul>
       <p>Anthropic and OpenAI keep what they receive according to their own policies.</p>

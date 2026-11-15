@@ -47,6 +47,16 @@ Above a list that could be grouped differently, a sentence names how the author 
 - Copy the supercut, the outline or the whole article as Markdown, or save the outline and supercut to Obsidian as a new note.
 - Close Spine and open it again later: it picks up where you left off.
 
+## Share a link
+
+You can share the article you’re reading as a link. Whoever opens it reads the article in Spine’s reader, with your notes, in any browser. They do not need Spine or an AI plan, because the link carries the notes Spine already wrote. All 4 lenses work, and so do the outline, the lists, the shortcuts and the Aa panel.
+
+To share, select the share button at the top right, then Share a link. Spine copies the link. Sharing the same article again keeps the same link, with the latest notes. Select Stop sharing to delete the copy, and the link stops working within 2 minutes.
+
+Shared pages credit the author, link to the original and ask search engines not to list them.
+
+Share links are personal for now. They need a key for Spine’s share server, which you add in Spine’s settings, under Advanced. To run your own, read [how the share server works](share/README.md).
+
 ## Keyboard shortcuts
 
 | Keys | What they do |

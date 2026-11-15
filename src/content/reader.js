@@ -1,7 +1,9 @@
 // The reader: finds the article on the page, lays it out in the layer, and runs
 // the reading ideas on it. It owns the lens (how much of the text you see), the
 // notes Claude or ChatGPT writes, and everything you can change while reading.
+// On a shared page, the article and its notes come with the link instead.
 import { extractArticle } from './extract.js';
+import { cleanBlock } from './clean.js';
 import { buildArticle } from './article.js';
 import { Layer } from './layer.js';
 import {
@@ -37,8 +39,21 @@ const THEMES = [
   { id: 'dusk', label: 'Dusk', bg: '#1f1e1d', ink: '#efede5' },
   { id: 'night', label: 'Night', bg: '#000000', ink: '#dbd9d2' },
 ];
+const SITE = 'https://cnxluc.github.io/spine/';
+// The states in which no one is reading and there may be no notes.
+const STOPPED = ['no-key', 'consent', 'confirm', 'error', 'short', 'paused', 'plain'];
 // The plan a way of reading runs on.
 const planOf = engine => (engine === 'codex' || engine === 'chatgpt' ? 'ChatGPT' : 'Claude');
+// A model's id as people say it: claude-opus-5-5 is Claude Opus 5.5.
+const modelName = id => {
+  const named = String(id ?? '');
+  if (!/^claude-/.test(named)) return named.replace(/^codex$/, 'Codex');
+  return named
+    .replace(/^claude-/, 'Claude ')
+    .replace(/-(\d)-(\d)$/, ' $1.$2')
+    .replace(/-/g, ' ')
+    .replace(/\b(opus|sonnet|haiku)\b/i, word => word[0].toUpperCase() + word.slice(1));
+};
 const sameSet = (a, b) => a.size === b.size && [...a].every(value => b.has(value));
 const el = (tag, className, text) => {
   const element = document.createElement(tag);
@@ -46,11 +61,25 @@ const el = (tag, className, text) => {
   if (text !== undefined) element.textContent = text;
   return element;
 };
+// A block as HTML for a share link. Text that sits in neighbouring text nodes
+// stays apart, with an empty comment between, because the reader wraps
+// sentences node by node and a shared page should wrap them the same way.
+function snapshotOf(block) {
+  const copy = block.cloneNode(true);
+  const walker = document.createTreeWalker(copy, NodeFilter.SHOW_TEXT);
+  const joined = [];
+  while (walker.nextNode()) if (walker.currentNode.nextSibling?.nodeType === Node.TEXT_NODE) joined.push(walker.currentNode);
+  for (const node of joined) node.after(document.createComment(''));
+  return copy.outerHTML;
+}
 
 export class Reader {
-  constructor() {
+  // shared: what a share link carries, for a reader on a shared page.
+  constructor({ shared = null } = {}) {
+    this.shared = shared;
     this.layer = new Layer();
     this.root = this.layer.root;
+    this.root.classList.toggle('shared', Boolean(shared));
     this.settings = null;
     this.article = null;
     this.lens = 'read';
@@ -101,6 +130,7 @@ export class Reader {
       }
       this.mount(extracted);
       this.layer.show();
+      this.refreshShare();
       await this.restorePosition();
       this.analysis = new Analysis(this);
       if (this.settings.autoRead) this.analysis.start();
@@ -108,9 +138,41 @@ export class Reader {
       return;
     }
     this.layer.show();
+    this.refreshShare();
+  }
+
+  // A shared page: the article and its notes come with the link, so nothing is
+  // found on the page and no one is asked to read.
+  async openShared() {
+    const shared = this.shared;
+    this.settings = await loadSettings();
+    this.applyAppearance();
+    this.layer.reveal();
+    const blocks = shared.article.blocks.flatMap(cleanBlock);
+    this.mount({ meta: { ...shared.article.meta }, blocks, words: shared.article.words }, `share:${shared.id}`);
+    const by = el('p', 'shared-by');
+    const spine = el('a', null, 'Spine');
+    spine.href = SITE;
+    spine.target = '_blank';
+    spine.rel = 'noopener';
+    by.append('Shared with ', spine, ', a reading layer for long writing.');
+    this.article.root.querySelector('.doc-foot .credit')?.before(by);
+    this.layer.show();
+    // Notes fit only the text they were written for.
+    const fits = Boolean(shared.notes) && shared.fingerprint === this.article.fingerprint;
+    if (shared.notes && !fits) console.warn('Spine: the shared notes don’t fit this text, so it shows as written');
+    if (fits) {
+      this.applyNotes(shared.notes, { settled: true });
+      if (shared.lists) this.applyLists(shared.lists);
+      if (shared.bridges) this.applyBridges(shared.bridges);
+    }
+    this.setAI(fits ? 'ready' : 'plain', { ...shared.by, cached: true });
+    await this.restorePosition();
   }
 
   close() {
+    // A shared page is the reader; there's no page under it to go back to.
+    if (this.shared) return;
     this.savePositionNow();
     this.setXray(false);
     this.layer.hide();
@@ -140,6 +202,8 @@ export class Reader {
     this.bridges = {};
     this.lists = null;
     this.notes = null;
+    this.snapshot = null;
+    this.shareState = null;
     this.root.classList.remove('has-keys', 'fades', 'skimming', 'emphasis', 'live');
   }
 
@@ -173,9 +237,15 @@ export class Reader {
     this.dockVisible(false);
   }
 
-  mount(extracted) {
+  // key: where this article's place is kept; its address unless it's shared.
+  mount(extracted, key = null) {
+    // The article as found, before the reader lays it out: what a share link
+    // carries, so a shared page can build the same article and fit the notes.
+    this.snapshot = this.shared
+      ? null
+      : { meta: structuredClone(extracted.meta), blocks: extracted.blocks.map(snapshotOf), words: extracted.words };
     const article = buildArticle(extracted);
-    article.key = canonicalUrl(article.meta.url || location.href);
+    article.key = key ?? canonicalUrl(article.meta.url || location.href);
     this.article = article;
     const layer = this.layer;
     layer.scroller.replaceChildren(article.root);
@@ -539,7 +609,7 @@ export class Reader {
     if (state === 'ready' || state === 'error') this.root.classList.remove('live');
     // Without notes, the lenses that need them show the text as written; the
     // chosen lens comes back as soon as notes arrive.
-    if (['no-key', 'consent', 'confirm', 'error', 'short', 'paused'].includes(state) && !this.keys.size && this.lens !== 'read') {
+    if (STOPPED.includes(state) && !this.keys.size && this.lens !== 'read') {
       this.wantedLens = this.lens;
       this.setLens('read', { remember: false, anchor: false });
     }
@@ -727,7 +797,7 @@ export class Reader {
     if (!this.article) return;
     const state = this.ai.state;
     const working = state === 'reading' || state === 'bridging';
-    const stopped = ['no-key', 'consent', 'confirm', 'error', 'short', 'paused'].includes(state);
+    const stopped = STOPPED.includes(state);
     for (const lens of LENSES) {
       const button = this.lensButtons[lens.id];
       const time = this.lensMinutes(lens.id);
@@ -1062,7 +1132,18 @@ export class Reader {
       const s = el('strong', null, value);
       text.append(s);
     };
-    if (state === 'consent') {
+    const when = this.ai.at ? new Date(this.ai.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
+    if (this.shared) {
+      // Whoever shared the piece read it; this page only shows the notes.
+      if (state === 'ready') {
+        strong('The notes came with this link');
+        text.append([modelName(this.ai.model), when].filter(Boolean).join(' · ') || 'Written when the piece was read');
+      } else {
+        strong('Shared without notes');
+        text.append('Spine hadn’t read this piece when it was shared, so it shows as written.');
+      }
+      button('Get Spine', true, () => window.open(SITE, '_blank', 'noopener'));
+    } else if (state === 'consent') {
       strong(`Read this with ${this.who}?`);
       text.append(
         this.cost?.engine === 'chatgpt'
@@ -1109,15 +1190,7 @@ export class Reader {
       settingsButton();
     } else if (state === 'ready') {
       strong(this.ai.cached ? 'Notes saved from before' : 'Notes ready');
-      const named = String(this.ai.model ?? '');
-      const model = /^claude-/.test(named)
-        ? named
-            .replace(/^claude-/, 'Claude ')
-            .replace(/-(\d)-(\d)$/, ' $1.$2')
-            .replace(/-/g, ' ')
-            .replace(/\b(opus|sonnet|haiku)\b/i, word => word[0].toUpperCase() + word.slice(1))
-        : named.replace(/^codex$/, 'Codex');
-      const when = this.ai.at ? new Date(this.ai.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
+      const model = modelName(this.ai.model);
       const spent =
         this.ai.billing === 'plan'
           ? `on your ${planOf(this.ai.engine)} plan`
@@ -1160,20 +1233,96 @@ export class Reader {
     panel.append(head, ideas);
   }
 
-  async copy(text, message) {
+  // Puts text on the clipboard; false when the browser won't.
+  async writeClipboard(text) {
     try {
       await navigator.clipboard.writeText(text);
+      return true;
     } catch {
       const area = el('textarea');
       area.value = text;
       area.style.cssText = 'position:fixed;opacity:0';
       this.layer.shadow.append(area);
       area.select();
-      document.execCommand('copy');
+      const copied = document.execCommand('copy');
       area.remove();
+      return copied;
     }
+  }
+
+  async copy(text, message) {
+    const copied = await this.writeClipboard(text);
     this.layer.closePanels();
-    this.layer.toast(message);
+    this.layer.toast(copied ? message : 'Your browser didn’t let Spine copy. Try again.');
+  }
+
+  /* Share links */
+
+  // Whether sharing is set up here, and this article's link if it has one.
+  async refreshShare() {
+    if (this.shared || !this.article) return;
+    const key = this.article.key;
+    const state = await chrome.runtime.sendMessage({ type: 'spine:share-status', key }).catch(() => null);
+    if (this.article?.key === key) this.shareState = state;
+  }
+
+  // What a link would show, so sharing an unchanged article again reuses it.
+  shareStamp() {
+    return [this.article.fingerprint, this.ai.at ?? '', Boolean(this.notes), Object.keys(this.bridges).length, Boolean(this.lists)].join(':');
+  }
+
+  // The article as found and the notes as they are now: everything a shared
+  // page needs to show it the same way, with no one reading it again.
+  sharePayload() {
+    const notes = this.notes ?? null;
+    return {
+      v: 1,
+      article: this.snapshot,
+      fingerprint: this.article.fingerprint,
+      notes,
+      lists: notes ? this.lists : null,
+      bridges: notes ? this.bridges : null,
+      by: notes ? { model: this.ai.model ?? null, engine: this.ai.engine ?? null, at: this.ai.at ?? null } : null,
+    };
+  }
+
+  async shareLink() {
+    const article = this.article;
+    if (!article || !this.snapshot) return;
+    this.layer.closePanels();
+    this.layer.toast('Making the link…', { duration: 20000 });
+    const reply = await chrome.runtime
+      .sendMessage({ type: 'spine:share', key: article.key, stamp: this.shareStamp(), payload: this.sharePayload() })
+      .catch(error => ({ ok: false, message: error.message }));
+    if (this.article !== article) return;
+    if (!reply?.ok) {
+      this.layer.toast(reply?.message ?? 'Spine couldn’t make the link. Try again.', { duration: 6000 });
+      return;
+    }
+    this.shareState = { ready: true, link: reply.url };
+    if (await this.writeClipboard(reply.url)) {
+      this.layer.toast(reply.updated ? 'Link copied, with the latest notes' : 'Link copied', {
+        label: 'Open',
+        action: () => window.open(reply.url, '_blank', 'noopener'),
+        duration: 6000,
+      });
+    } else {
+      this.layer.toast('The link is ready', { label: 'Copy', action: () => this.copy(reply.url, 'Link copied'), duration: 8000 });
+    }
+  }
+
+  async stopSharing() {
+    const article = this.article;
+    this.layer.closePanels();
+    const reply = await chrome.runtime
+      .sendMessage({ type: 'spine:unshare', key: article.key })
+      .catch(error => ({ ok: false, message: error.message }));
+    if (!reply?.ok) {
+      this.layer.toast(reply?.message ?? 'Spine couldn’t delete the link. Try again.', { duration: 6000 });
+      return;
+    }
+    if (this.article === article) this.shareState = { ready: true, link: null };
+    this.layer.toast('Link deleted. It stops working within 2 minutes.', { duration: 5000 });
   }
 
   fillShare(panel) {
@@ -1197,6 +1346,17 @@ export class Reader {
     if (!article) {
       panel.append(el('p', null, 'Nothing to share yet.'));
       return;
+    }
+    if (this.shared) {
+      item('link', 'Copy this link', `${location.host}${location.pathname}`, () => this.copy(location.href, 'Link copied'));
+      menu.append(el('hr'));
+    } else if (this.shareState?.ready) {
+      const link = this.shareState.link;
+      const busy = this.ai.state === 'reading' || this.ai.state === 'bridging';
+      const hint = busy ? 'Once the notes are ready' : link ? link.replace(/^https?:\/\//, '') : 'A page anyone can open, with these notes';
+      item('link', link ? 'Copy the share link' : 'Share a link', hint, () => this.shareLink(), !busy);
+      if (link) item('unlink', 'Stop sharing', 'The link stops working', () => this.stopSharing());
+      menu.append(el('hr'));
     }
     const supercut = () => exporter.supercutMarkdown(article, this.runs, this.bridges, this.settings.bridges);
     const outline = () => exporter.outlineMarkdown(article, this.outline.summaries);
@@ -1248,7 +1408,7 @@ export class Reader {
       'Show or hide the outline beside the text',
       'Next theme',
       'Smaller or larger text',
-      'Close a panel, or close Spine',
+      this.shared ? 'Close a panel' : 'Close a panel, or close Spine',
     ];
     const card = el('div', 'help-card');
     card.append(el('h2', null, 'Shortcuts'), el('p', null, 'Spine keeps the page’s own shortcuts out of your way while it’s open.'));

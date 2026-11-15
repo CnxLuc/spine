@@ -1,29 +1,7 @@
 // Spine's entry on a page. The background worker adds this script when you
 // first open Spine on a tab and then asks it to toggle the reader.
 import { Reader } from './reader.js';
-
-// Newsreader, loaded from the extension into this page's font set, under a name
-// no page uses. Fonts from buffers aren't fetched, so a page's content security
-// policy can't block them.
-async function loadFonts() {
-  if ([...document.fonts].some(face => face.family === 'Spine Newsreader')) return;
-  const faces = [
-    ['fonts/Newsreader.ttf', 'normal'],
-    ['fonts/Newsreader-Italic.ttf', 'italic'],
-  ];
-  await Promise.all(
-    faces.map(async ([file, style]) => {
-      try {
-        const buffer = await (await fetch(chrome.runtime.getURL(file))).arrayBuffer();
-        const face = new FontFace('Spine Newsreader', buffer, { style, weight: '200 800', display: 'swap' });
-        await face.load();
-        document.fonts.add(face);
-      } catch (error) {
-        console.warn('Spine couldn’t load its font', error);
-      }
-    }),
-  );
-}
+import { loadFonts } from './fonts.js';
 
 if (!globalThis.__spineReader) {
   // A Spine left on the page by an earlier version of the extension (after an
@@ -38,7 +16,7 @@ if (!globalThis.__spineReader) {
   };
   // Registered after the event above, so it only hears newer versions.
   setTimeout(() => document.addEventListener('spine:shutdown', shutdown), 0);
-  const fonts = loadFonts();
+  const fonts = loadFonts(file => chrome.runtime.getURL(file));
   chrome.runtime.onMessage.addListener((message, sender, reply) => {
     if (message?.type === 'spine:toggle') {
       fonts
