@@ -40,27 +40,29 @@
           <label class="engine" data-engine="claude-code">
             <input type="radio" name="engine" value="claude-code" />
             <span class="engine-body">
-              <b>Claude Code on this computer</b>
-              <small>Reads on your Claude plan, with nothing extra to pay. It counts toward your plan’s usage limits.</small>
+              <b>Claude, on your Pro or Max plan</b>
+              <small>Reads through Claude Code, Anthropic’s app, on this computer, with nothing extra to pay. It counts toward your plan’s usage limits.</small>
               <span class="engine-status" id="claude-status" role="status">Checking…</span>
             </span>
           </label>
-          <label class="engine" data-engine="codex">
-            <input type="radio" name="engine" value="codex" />
-            <span class="engine-body">
-              <b>Codex on this computer</b>
-              <small>Reads on your ChatGPT plan, with nothing extra to pay. It counts toward your plan’s usage limits.</small>
-              <span class="engine-status" id="codex-status" role="status">Checking…</span>
-            </span>
-          </label>
           <div class="setup" id="local-setup" hidden>
-            <span>Use Claude Code or Codex? Run this once in Terminal to connect Spine to them:</span>
+            <span>To read on your Claude plan, paste this into <span class="shell">Terminal</span> and press <span class="enter">Return</span>. It installs Claude Code if you need it, asks you to sign in and connects Spine. You only do this once.</span>
             <code id="local-command">curl -fsSL https://cnxluc.github.io/spine/connect.sh | bash</code>
             <span class="setup-actions">
               <button type="button" id="copy-command" class="ghost">Copy</button>
               <button type="button" id="check-again" class="ghost">Check again</button>
             </span>
+            <small class="setup-hint" id="terminal-hint" hidden>To open Terminal, press ⌘ Space, type Terminal and press Return.</small>
+            <small class="setup-hint" id="windows-hint" hidden>To open PowerShell, press the Windows key, type PowerShell and press Enter.</small>
           </div>
+          <label class="engine" data-engine="codex">
+            <input type="radio" name="engine" value="codex" />
+            <span class="engine-body">
+              <b>Codex on this computer</b>
+              <small>Reads on your ChatGPT plan through OpenAI’s Codex, if you use it. The command above connects it too.</small>
+              <span class="engine-status" id="codex-status" role="status">Checking…</span>
+            </span>
+          </label>
           <label class="engine" data-engine="api">
             <input type="radio" name="engine" value="api" />
             <span class="engine-body">
@@ -136,7 +138,7 @@
         </label>
         <label class="toggle">
           <input type="checkbox" id="autoRead" />
-          <span><b>Read with Claude as soon as Spine opens</b><small id="auto-hint">Turn this off to choose which articles Claude reads.</small></span>
+          <span><b>Read as soon as Spine opens</b><small id="auto-hint">Turn this off to choose which articles are read.</small></span>
         </label>
         <label class="field inline">
           <span>Skip pieces shorter than</span>

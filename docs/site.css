@@ -499,3 +499,33 @@ kbd {
   overflow-wrap: anywhere;
   user-select: all;
 }
+
+/* Installing: the download's steps beside opening Spine and choosing who reads. */
+.install {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 22px;
+}
+.install .first {
+  grid-row: span 2;
+}
+.install .shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 14px 0 16px;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--line) 80%, transparent);
+}
+@media (max-width: 900px) {
+  .install {
+    grid-template-columns: 1fr;
+  }
+  .install .first {
+    grid-row: auto;
+  }
+}
+.card p.after {
+  margin-top: 12px;
+}

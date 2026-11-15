@@ -85,25 +85,31 @@
 
     <section class="band" id="install">
       <h2>Install Spine</h2>
-      <p class="sub">It takes a minute. Spine reads on a ChatGPT or Claude plan you already pay for, or with an Anthropic API key; without one, it’s still a calm reader view.</p>
-      <div class="cols">
-        <div class="card">
+      <p class="sub">It takes about 2 minutes. Spine reads on a ChatGPT or Claude plan you already pay for. Without one, it’s still a calm reader view.</p>
+      <div class="install">
+        <div class="card first">
           <h3>1. Add it to your browser</h3>
           <ol>
-            <li><a href="https://github.com/CnxLuc/spine/releases/latest/download/spine.zip">Download Spine</a> and double-click the file to unzip it.</li>
-            <li>Type <code>chrome://extensions</code> in the address bar and turn on Developer mode, top right.</li>
-            <li>Select Load unpacked and choose the unzipped <code>spine</code> folder. Keep the folder: your browser loads Spine from it.</li>
+            <li><a href="https://github.com/CnxLuc/spine/releases/latest/download/spine.zip">Download Spine</a> and open the file to unzip it.</li>
+            <li>Move the <code>spine</code> folder somewhere you’ll keep it, such as Documents. Your browser runs Spine from this folder.</li>
+            <li>Type <code>chrome://extensions</code> in the address bar. Turn on Developer mode, then select Load unpacked and choose the <code>spine</code> folder.</li>
           </ol>
+          <img class="shot" src="assets/install-extensions.png" width="1100" height="124" alt="The extensions page. Developer mode, at the top right, is turned on, and Load unpacked is the first button under the title." />
+          <p class="fine">A Chrome Web Store listing is on its way. It will install Spine in one click and keep it up to date. Until then, to update Spine, download it again, replace the folder’s contents and select the reload arrow on Spine’s card.</p>
         </div>
         <div class="card">
           <h3>2. Open an article</h3>
-          <p>Press <kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>S</kbd> on a Mac, or <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>S</kbd> on Windows, or select Spine’s toolbar button.</p>
+          <p>Spine opens a welcome page that shows you how to pin it. Then, on any long article, select Spine’s button or press <kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>S</kbd> on a Mac, or <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>S</kbd> on Windows.</p>
           <p>Press <kbd>?</kbd> in Spine for every shortcut.</p>
         </div>
         <div class="card">
           <h3>3. Choose who reads</h3>
-          <p>The first time, Spine asks right in the reader. Continue with ChatGPT signs in to your Plus or Pro plan, with nothing to install. Use Claude Code shows you one command to paste into Terminal, once.</p>
-          <p>ChatGPT or Claude reads each piece once, in 15 to 60 seconds, and Spine saves the notes, so reading it again is free.</p>
+          <p>The first time, Spine asks right in the reader.</p>
+          <p>ChatGPT, on your Plus or Pro plan: you sign in once, and there’s nothing to install.</p>
+          <p>Claude, on your Pro or Max plan: you paste one command, once. It installs Claude Code, Anthropic’s app for your plan, if you need it, asks you to sign in and connects Spine. On a Mac or Linux, in Terminal:</p>
+          <code class="command">curl -fsSL https://cnxluc.github.io/spine/connect.sh | bash</code>
+          <p class="after">On Windows, in PowerShell:</p>
+          <code class="command">irm https://raw.githubusercontent.com/CnxLuc/spine/main/docs/connect.ps1 | iex</code>
         </div>
       </div>
     </section>
@@ -115,7 +121,7 @@
         <table>
           <thead><tr><th>Reader</th><th>Short post, 3 minutes</th><th>Long essay, 50 minutes</th></tr></thead>
           <tbody>
-            <tr><td>ChatGPT, Claude Code or Codex</td><td>on your plan</td><td>on your plan</td></tr>
+            <tr><td>ChatGPT or Claude, on your plan</td><td>nothing extra</td><td>nothing extra</td></tr>
             <tr><td>API key, Claude Opus 5.5</td><td>about 6¢</td><td>about 62¢</td></tr>
             <tr><td>API key, Claude Sonnet 5.5</td><td>about 3¢</td><td>about 31¢</td></tr>
             <tr><td>API key, Claude Haiku 4.5</td><td>about 2¢</td><td>about 15¢</td></tr>
@@ -133,8 +139,8 @@
       <h2>Your reading stays yours</h2>
       <div class="cols">
         <div class="card">
-          <h3>No servers</h3>
-          <p>Spine has no servers, analytics or tracking. Your sign-in, key, notes and settings stay in your browser.</p>
+          <h3>No tracking</h3>
+          <p>Spine has no analytics or tracking, and no server of its own apart from one for share links, which only works with a key. Your sign-in, key, notes and settings stay in your browser.</p>
         </div>
         <div class="card">
           <h3>Straight to your reader</h3>

@@ -7,6 +7,7 @@ import { DEFAULT_MODEL, INPUTS, SCHEMAS, SYSTEMS } from './shared/prompts.js';
 import { ICONS } from './shared/lucide-icons.js';
 import * as chatgpt from './chatgpt.js';
 import * as shares from './shares.js';
+import { HOST, NAMES, PING, TOOLS, claudeReading, codexReading, describe, runRequest, unreachable } from './local.js';
 
 // Opening Spine on a tab: ask the reader there to toggle, and if no reader is
 // listening yet, add it first.
@@ -46,7 +47,8 @@ chrome.runtime.onInstalled.addListener(details => {
   chrome.contextMenus.create({ id: 'spine-read', title: 'Read with Spine', contexts: ['page'] }, () =>
     void chrome.runtime.lastError,
   );
-  if (details.reason === 'install' && !SPINE_TEST) chrome.runtime.openOptionsPage();
+  // Once, on install: how to start.
+  if (details.reason === 'install' && !SPINE_TEST) chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
 });
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'spine-read') toggle(tab);
@@ -119,13 +121,12 @@ async function settings() {
   return { apiKey: apiKey.trim(), baseURL: baseURL.trim(), model, engine, chatgptModel };
 }
 
-// Claude Code or Codex on this computer, reached through Spine's native
-// messaging host (native/spine_host.py), which the reader installs with one
-// command. The browser starts the host for each connection and only lets Spine
-// in. The host runs the reader's own, unmodified `claude -p` or `codex exec`,
-// so reading uses their Claude or ChatGPT plan; Spine never sees their sign-in.
-const HOST = 'com.spine.local';
-const TOOLS = { 'claude-code': 'claude', codex: 'codex' };
+// Claude Code or Codex on this computer, reached through Spine's connector
+// (native/spine-host.sh), which the reader adds with one command. The browser
+// starts the connector for each connection and only lets Spine in. It runs the
+// reader's own, unmodified `claude -p` or `codex exec`, so reading uses their
+// Claude or ChatGPT plan; Spine never sees their sign-in. local.js makes
+// sense of what the tools print.
 let found = null;
 
 function probeLocal() {
@@ -145,14 +146,10 @@ function probeLocal() {
       resolve(result);
     };
     const timer = setTimeout(() => finish({ available: false, reason: 'timeout' }), 20000);
-    port.onMessage.addListener(message => {
-      if (message?.type === 'pong') finish({ available: true, claude: message.claude ?? null, codex: message.codex ?? null });
-    });
-    port.onDisconnect.addListener(() => {
-      const reason = chrome.runtime.lastError?.message ?? '';
-      finish({ available: false, reason: /not found/i.test(reason) ? 'not-installed' : reason || 'closed' });
-    });
-    port.postMessage({ type: 'ping' });
+    // Anything but a pong is a connector too old to understand the ping.
+    port.onMessage.addListener(message => finish(describe(message)));
+    port.onDisconnect.addListener(() => finish({ available: false, reason: unreachable(chrome.runtime.lastError?.message) }));
+    port.postMessage(PING);
   });
 }
 
@@ -180,7 +177,16 @@ async function engine(config, options) {
   return { kind: 'api', ready: keyed, local: here };
 }
 
-const NAMES = { 'claude-code': 'Claude Code', codex: 'Codex' };
+// Why Claude Code or Codex can't read yet, in a line. The same command fixes
+// each of these.
+function notReady({ kind, local: here }) {
+  const name = NAMES[kind];
+  if (!here?.available) return `${name} isn’t connected to Spine yet.`;
+  if (here.outdated) return `Spine’s connection to ${name} needs updating.`;
+  const tool = here[TOOLS[kind]];
+  if (!tool) return `${name} isn’t installed on this computer.`;
+  return `${name} isn’t signed in.`;
+}
 
 // Codex and ChatGPT answer in one go or stream quickly; they read the notes
 // carefully and the rest quickly.
@@ -202,15 +208,16 @@ const MAX_TOKENS = { notes: 32000, lists: 16000, bridges: 16000 };
 const inputFor = (kind, payload) =>
   kind === 'lists' ? INPUTS.lists(payload, Object.keys(ICONS)) : INPUTS[kind](payload);
 
-// One read through Claude Code or Codex: the host streams the reply back, and
-// closing the reader's port stops it, which stops the tool.
+// One read through Claude Code or Codex: the connector passes on what the tool
+// prints as it prints it, and closing the reader's port stops it, which stops
+// the tool.
 function readLocally(port, signal, kind, request, payload, model) {
   const name = NAMES[kind];
   let native;
   try {
     native = chrome.runtime.connectNative(HOST);
   } catch {
-    port.postMessage({ type: 'error', code: 'local', message: `Spine can’t reach ${name} on this computer.` });
+    port.postMessage({ type: 'error', code: 'local-setup', message: `Spine can’t reach ${name} on this computer.` });
     return;
   }
   let settled = false;
@@ -225,29 +232,51 @@ function readLocally(port, signal, kind, request, payload, model) {
       port.postMessage(message);
     } catch {}
   };
+  const reading = kind === 'codex' ? codexReading() : claudeReading();
   native.onMessage.addListener(message => {
-    if (message?.type === 'delta') relay({ type: 'delta', text: message.text });
-    else if (message?.type === 'done') {
-      settled = true;
-      relay({ type: 'done', text: message.text, model: kind === 'codex' ? 'codex' : model, usage: message.usage, billing: 'plan' });
-    } else if (message?.type === 'error') {
-      settled = true;
-      relay({ type: 'error', code: message.code || 'local', message: message.message.replace(/^It\b/, name) });
+    if (settled) return;
+    // The connector turned the request down: one it doesn't understand means
+    // it's older than this Spine; anything else, it says why.
+    const out =
+      message?.type === 'refused'
+        ? [
+            message.code === 'request'
+              ? { type: 'error', code: 'local-setup', message: `Spine’s connection to ${name} needs updating.` }
+              : { type: 'error', code: 'local', message: `${name} couldn’t start: ${message.message}` },
+          ]
+        : reading(message);
+    for (const next of out) {
+      if (next.type === 'done') relay({ ...next, model: kind === 'codex' ? 'codex' : model, billing: 'plan' });
+      else relay(next);
+      if (next.type === 'done' || next.type === 'error') {
+        settled = true;
+        try {
+          native.disconnect();
+        } catch {}
+      }
     }
   });
   native.onDisconnect.addListener(() => {
-    if (!settled) relay({ type: 'error', code: 'local', message: `${name} stopped before it finished. Try again.` });
+    if (!settled) {
+      const reason = unreachable(chrome.runtime.lastError?.message);
+      relay(
+        reason === 'closed'
+          ? { type: 'error', code: 'local', message: `${name} stopped before it finished. Try again.` }
+          : { type: 'error', code: 'local-setup', message: `Spine can’t reach ${name} on this computer.` },
+      );
+    }
     settled = true;
   });
-  native.postMessage({
-    type: 'run',
-    engine: TOOLS[kind],
-    model,
-    effort: kind === 'codex' ? effortFor(request) : 'medium',
-    system: SYSTEMS[request],
-    user: inputFor(request, payload),
-    schema: SCHEMAS[request],
-  });
+  native.postMessage(
+    runRequest({
+      engine: kind,
+      model,
+      effort: kind === 'codex' ? effortFor(request) : 'medium',
+      system: SYSTEMS[request],
+      user: inputFor(request, payload),
+      schema: SCHEMAS[request],
+    }),
+  );
 }
 
 // Opus 5.5 and Sonnet 5.5 think adaptively, at medium effort, and fall back to
@@ -325,15 +354,8 @@ chrome.runtime.onConnect.addListener(port => {
       return;
     }
     if (way.kind !== 'api') {
-      const name = NAMES[way.kind];
       if (!way.ready) {
-        port.postMessage({
-          type: 'error',
-          code: 'local',
-          message: way.local?.[TOOLS[way.kind]]
-            ? `${name} isn’t signed in. Run ${TOOLS[way.kind]} in Terminal and sign in, then try again.`
-            : `Spine can’t reach ${name} on this computer. Open Spine’s settings to connect it.`,
-        });
+        port.postMessage({ type: 'error', code: 'local-setup', message: notReady(way) });
         return;
       }
       readLocally(port, controller.signal, way.kind, message.kind, message.payload, model);

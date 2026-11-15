@@ -472,6 +472,16 @@ select {
   border-radius: 14px;
   background: var(--chip);
 }
+#local-setup code {
+  background: var(--card);
+}
+.setup-hint {
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+.setup-hint[hidden] {
+  display: none;
+}
 .codex-model {
   margin: 18px 0 0;
   font-size: 13.5px;

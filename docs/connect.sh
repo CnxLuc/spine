@@ -1,468 +1,507 @@
 #!/bin/bash
-# Connects Spine to Claude Code and Codex on this computer, so Spine reads on
-# your own Claude or ChatGPT plan instead of API credits.
+# Connects Spine to your Claude plan, through Claude Code on this computer, so
+# Spine reads on your Claude Pro or Max plan with nothing extra to pay. It
+# connects Codex too, if you have it.
 #
 #   curl -fsSL https://cnxluc.github.io/spine/connect.sh | bash
 #   curl -fsSL https://cnxluc.github.io/spine/connect.sh | bash -s -- --uninstall
 #
-# It installs a small program that your browser starts when Spine asks for a
-# reading, and that only Spine may start. The program runs your own Claude Code
-# (`claude -p`) or Codex (`codex exec`), signed in as you; Spine never sees your
-# sign-in. Nothing runs in the background.
+# 1. If Claude Code isn't installed, it offers to install it with Anthropic's
+#    own installer (claude.ai/install.sh).
+# 2. If Claude Code isn't signed in, it runs Anthropic's own sign-in
+#    (`claude auth login`), which opens your browser.
+# 3. It adds Spine's connector: a short script your browser starts when Spine
+#    asks for a reading, and that only Spine may start. The script runs your
+#    own Claude Code (`claude -p`) or Codex (`codex exec`), signed in as you.
+#    Spine never sees your sign-in, and nothing runs in the background.
+#
+# Add --yes to answer yes to every question.
 set -euo pipefail
 
 NAME="com.spine.local"
 # Spine's extension ids: the downloaded version, then the Chrome Web Store one.
 IDS=(hbaekihlobpbmhciebgibgeljinadcib)
 if [ -n "${SPINE_EXTENSION_IDS:-}" ]; then IDS+=(${SPINE_EXTENSION_IDS//,/ }); fi
+CLAUDE_INSTALLER="${SPINE_CLAUDE_INSTALLER:-https://claude.ai/install.sh}"
 
-case "$(uname -s)" in
-  Darwin)
-    DATA="$HOME/Library/Application Support"
-    HOME_DIR="$DATA/Spine"
-    BROWSERS=("Google/Chrome" "Google/Chrome Beta" "Google/Chrome Canary" "Chromium" "Arc/User Data" "BraveSoftware/Brave-Browser" "Microsoft Edge" "Vivaldi" "Dia/User Data" "Aside" "Thorium" "Comet")
-    ;;
-  Linux)
-    DATA="${XDG_CONFIG_HOME:-$HOME/.config}"
-    HOME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/spine"
-    BROWSERS=("google-chrome" "google-chrome-beta" "chromium" "BraveSoftware/Brave-Browser" "microsoft-edge" "vivaldi")
-    ;;
-  *)
-    echo "Spine connects to Claude Code on macOS and Linux." >&2
-    exit 1
-    ;;
-esac
-
+bold=""
+dim=""
+plain=""
+if [ -t 1 ]; then
+  bold=$'\033[1m'
+  dim=$'\033[2m'
+  plain=$'\033[0m'
+fi
 say() { printf '%s\n' "$*"; }
-fail() { printf 'Spine: %s\n' "$*" >&2; exit 1; }
+step() { printf '\n%s%s%s\n' "$bold" "$*" "$plain"; }
+fail() {
+  printf '\nSpine: %s\n' "$*" >&2
+  exit 1
+}
 
-if [ "${1:-}" = "--uninstall" ]; then
+YES=0
+# Questions go to the terminal, since this script arrives on standard input.
+TTY=0
+if [ "${SPINE_TTY:-}" != 0 ] && (: </dev/tty) 2>/dev/null; then TTY=1; fi
+ask() {
+  local answer=""
+  if [ "$YES" = 1 ]; then return 0; fi
+  if [ "$TTY" = 0 ]; then return 1; fi
+  printf '%s [Y/n] ' "$1" >/dev/tty
+  IFS= read -r answer </dev/tty || answer=n
+  case $answer in "" | y | Y | yes | Yes | YES) return 0 ;; *) return 1 ;; esac
+}
+
+setup_paths() {
+  case "$(uname -s)" in
+    Darwin)
+      DATA="$HOME/Library/Application Support"
+      # A folder no other app uses: Esoteric Software's Spine, an animation
+      # editor, keeps its backups in Application Support/Spine.
+      HOME_DIR="$DATA/com.spine.local"
+      OLD_DIR="$DATA/Spine"
+      BROWSERS=("Google/Chrome" "Google/Chrome Beta" "Google/Chrome Dev" "Google/Chrome Canary" "Chromium" "Arc/User Data" "BraveSoftware/Brave-Browser" "Microsoft Edge" "Vivaldi" "Dia/User Data" "Aside" "Thorium" "Comet")
+      ;;
+    Linux)
+      DATA="${XDG_CONFIG_HOME:-$HOME/.config}"
+      HOME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/com.spine.local"
+      OLD_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/spine"
+      BROWSERS=("google-chrome" "google-chrome-beta" "google-chrome-unstable" "chromium" "BraveSoftware/Brave-Browser" "microsoft-edge" "vivaldi")
+      ;;
+    *)
+      fail "this command is for Mac and Linux. On Windows, follow the steps at cnxluc.github.io/spine."
+      ;;
+  esac
+}
+
+browser_name() {
+  case "$1" in
+    Google/Chrome | google-chrome) printf 'Chrome' ;;
+    "Google/Chrome Beta" | google-chrome-beta) printf 'Chrome Beta' ;;
+    "Google/Chrome Dev" | google-chrome-unstable) printf 'Chrome Dev' ;;
+    "Google/Chrome Canary") printf 'Chrome Canary' ;;
+    BraveSoftware/*) printf 'Brave' ;;
+    "Microsoft Edge" | microsoft-edge) printf 'Edge' ;;
+    chromium) printf 'Chromium' ;;
+    vivaldi) printf 'Vivaldi' ;;
+    *) printf '%s' "${1%%/*}" ;;
+  esac
+}
+
+# Spine 1.2 and 1.3.0 kept the connector in a folder named Spine, which
+# another app may share. Remove only the files the connector put there.
+tidy_old() {
+  [ -d "$OLD_DIR" ] || return 0
+  rm -f "$OLD_DIR/spine_host.py" "$OLD_DIR/spine-host" "$OLD_DIR/spine-host.sh"
+  if [ -d "$OLD_DIR/work" ]; then
+    rm -rf "$OLD_DIR/work"/run.* "$OLD_DIR/work"/spine-*.json
+    rmdir "$OLD_DIR/work" 2>/dev/null || true
+  fi
+  rmdir "$OLD_DIR" 2>/dev/null || true
+}
+
+uninstall() {
   for browser in "${BROWSERS[@]}"; do rm -f "$DATA/$browser/NativeMessagingHosts/$NAME.json"; done
   rm -rf "$HOME_DIR"
-  say "Removed Spine's connection to Claude Code and Codex. Spine will use an API key again if you set one."
-  exit 0
-fi
+  tidy_old
+  say "Removed Spine's connection to Claude Code and Codex. Claude Code itself stays installed."
+}
 
-# Claude Code and Codex: whichever are installed, at least one.
+# Claude Code or Codex: on the PATH, or where their installers put them.
 find_tool() {
-  local tool="$1" found
+  local tool="$1" found candidate
   found="$(command -v "$tool" 2>/dev/null || true)"
-  for candidate in "$HOME/.local/bin/$tool" "$HOME/.claude/local/$tool" /opt/homebrew/bin/$tool /usr/local/bin/$tool "$HOME/.npm-global/bin/$tool"; do
-    [ -z "$found" ] && [ -x "$candidate" ] && found="$candidate"
+  for candidate in "$HOME/.local/bin/$tool" "$HOME/.claude/local/$tool" "/opt/homebrew/bin/$tool" "/usr/local/bin/$tool" "$HOME/.npm-global/bin/$tool" "$HOME/.bun/bin/$tool"; do
+    if [ -z "$found" ] && [ -x "$candidate" ]; then found="$candidate"; fi
   done
   printf '%s' "$found"
 }
-CLAUDE="$(find_tool claude)"
-CODEX="$(find_tool codex)"
-[ -n "$CLAUDE$CODEX" ] || fail "Neither Claude Code nor Codex is installed. Install one (claude.com/claude-code or developers.openai.com/codex), sign in, then run this again."
-if [ -n "$CLAUDE" ] && ! "$CLAUDE" auth status 2>/dev/null | grep -q '"loggedIn": *true'; then
-  say "Claude Code is installed but not signed in. Run: claude"
-fi
-if [ -n "$CODEX" ] && ! "$CODEX" login status >/dev/null 2>&1; then
-  say "Codex is installed but not signed in. Run: codex login"
-fi
 
-# Python 3, which runs the small program. macOS has it with Apple's command
-# line tools, which Claude Code users usually have already.
-PYTHON=""
-if [ "$(uname -s)" = "Darwin" ] && xcode-select -p >/dev/null 2>&1 && [ -x /usr/bin/python3 ]; then
-  PYTHON=/usr/bin/python3
-fi
-[ -n "$PYTHON" ] || PYTHON="$(command -v python3 2>/dev/null || true)"
-[ -n "$PYTHON" ] || fail "Spine needs Python 3. On a Mac, run: xcode-select --install"
+claude_signed_in() {
+  "$CLAUDE" auth status </dev/null 2>/dev/null | grep -q '"loggedIn": *true'
+}
 
-mkdir -p "$HOME_DIR"
-cat > "$HOME_DIR/spine_host.py" <<'SPINE_HOST'
-#!/usr/bin/env python3
-"""Spine's native messaging host: lets the Spine extension ask Claude Code or
-Codex on this computer to read an article, so the reading runs on the reader's
-own Claude or ChatGPT plan.
+install_claude() {
+  step "Installing Claude Code, with Anthropic's installer"
+  if ! curl -fsSL "$CLAUDE_INSTALLER" | bash; then
+    say "Claude Code didn't install. You can try again later with: curl -fsSL https://claude.ai/install.sh | bash"
+    return 1
+  fi
+  CLAUDE="$(find_tool claude)"
+  [ -n "$CLAUDE" ]
+}
 
-The browser starts this program when Spine connects to it, and only Spine can:
-the browser checks the extension's id against the list in this host's
-manifest. Each connection carries one request. The program runs the reader's
-own, unmodified `claude -p` or `codex exec`, signed in by the reader, streams
-the reply back, and exits. It never reads or stores anyone's credentials.
+sign_in_claude() {
+  step "Signing in to Claude"
+  say "Your browser opens Claude's sign-in. Sign in with the account that has your Pro or Max plan, then come back here."
+  if [ "$TTY" = 1 ]; then
+    "$CLAUDE" auth login </dev/tty || true
+  else
+    "$CLAUDE" auth login </dev/null || true
+  fi
+  claude_signed_in
+}
 
-Messages, each a JSON object framed by a 4-byte length, as Chrome's native
-messaging defines:
+install_connector() {
+  local host_file="$HOME_DIR/spine-host.sh" wrapper="$HOME_DIR/spine-host" origins="" id manifest browser
+  mkdir -p "$HOME_DIR/work"
+  tidy_old
+  # Each file is written beside its place and then moved into it, so a
+  # connector that's running right now finishes with the file it started.
+  cat >"$host_file.new" <<'SPINE_HOST'
+#!/bin/bash
+# Spine's connector: lets the Spine extension ask Claude Code or Codex on this
+# computer to read an article, so the reading runs on the reader's own Claude
+# or ChatGPT plan.
+#
+# Your browser starts this script when Spine asks for a reading, and only
+# Spine can: the browser checks the extension's id against the list in the
+# connector's manifest. Each connection carries one request. The script runs
+# your own, unmodified `claude -p` or `codex exec`, signed in as you, passes
+# on what it prints, and exits. It never reads or stores your sign-in.
+#
+# It needs only bash and tools every Mac and Linux computer has: no Python,
+# no Node. Spine itself makes sense of what Claude Code or Codex prints.
+#
+# Every message is framed by a 4-byte length in native byte order, as Chrome's
+# native messaging defines. Version 3 of the protocol:
+#
+#   in   "ping"
+#   out  {"type":"pong","host":3,"claude":TOOL,"codex":TOOL}
+#        TOOL is null when the tool isn't installed. Otherwise it gives the
+#        tool's path, what `--version` printed, and what its sign-in check
+#        printed, each in base64, and the check's exit code:
+#        {"path":"…","version":"…","status":"…","code":0}
+#
+#   in   "run.ENGINE.MODEL.EFFORT.SYSTEM.SCHEMA.INPUT"
+#        Each field is in base64url. ENGINE is claude or codex. INPUT, the
+#        article, goes straight to the tool's standard input.
+#   out  Each line the tool prints, as it prints it: Claude Code's stream-json
+#        or Codex's JSON events.
+#   out  {"type":"exit","code":0,"stderr":"…"}, with the end of the tool's
+#        error output in base64. "missing":true means the tool isn't installed.
+#
+#   out  {"type":"refused","code":"…","message":"…"} for a request it can't take.
 
-  in   {"type": "ping"}
-  out  {"type": "pong", "host": "2",
-        "claude": {"path": "...", "version": "...", "signedIn": true, "plan": "claude.ai"} or null,
-        "codex": {"path": "...", "version": "...", "signedIn": true, "plan": "ChatGPT"} or null}
+set -u -f
+export LC_ALL=C # lengths in bytes, and plain bytes through every tool
 
-  in   {"type": "run", "engine": "claude" or "codex", "model": "...", "system": "...",
-        "user": "...", "schema": {...}, "effort": "medium"}
-  out  {"type": "delta", "text": "..."}   (any number, as the reply streams)
-  out  {"type": "done", "text": "...", "usage": {...}}
-   or  {"type": "error", "code": "...", "message": "..."}
+HOST_VERSION=3
+here=$(cd "$(dirname "$0")" && pwd -P)
+work="$here/work"
 
-Works with the Python 3 that ships with macOS (3.9) and on Linux.
-"""
-import json
-import os
-import shutil
-import struct
-import subprocess
-import sys
-import tempfile
-import threading
-
-HOST_VERSION = "2"
 # Where Claude Code and Codex usually live, for browsers that start this
-# program with a short PATH.
-COMMON_PATHS = [
-    "~/.local/bin",
-    "~/.claude/local",
-    "/opt/homebrew/bin",
-    "/usr/local/bin",
-    "~/.npm-global/bin",
-    "~/.bun/bin",
-    "/usr/bin",
-]
+# script with a short PATH. The installer may also give their paths as
+# CLAUDE_BIN and CODEX_BIN.
+HOME=${HOME-}
+SEARCH=${SPINE_SEARCH-"$HOME/.local/bin:$HOME/.claude/local:$HOME/.npm-global/bin:$HOME/.bun/bin:$HOME/.volta/bin:/opt/homebrew/bin:/usr/local/bin"}
 
-out = sys.stdout.buffer
-out_lock = threading.Lock()
+if printf 'YQ==' | base64 -d >/dev/null 2>&1; then decode=-d; else decode=-D; fi
+if [ "$(printf '\001\000\000\000' | od -An -tu4 | tr -d ' \n')" = 1 ]; then little=1; else little=0; fi
 
+# Sends one message: a JSON value on one line.
+frame() {
+  local n=${#1} head
+  if [ $little = 1 ]; then
+    printf -v head '\\%03o\\%03o\\%03o\\%03o' $((n & 255)) $((n >> 8 & 255)) $((n >> 16 & 255)) $((n >> 24 & 255))
+  else
+    printf -v head '\\%03o\\%03o\\%03o\\%03o' $((n >> 24 & 255)) $((n >> 16 & 255)) $((n >> 8 & 255)) $((n & 255))
+  fi
+  printf "$head%s" "$1"
+}
 
-def send(message):
-    data = json.dumps(message).encode("utf-8")
-    with out_lock:
-        out.write(struct.pack("@I", len(data)))
-        out.write(data)
-        out.flush()
+base64_of() { printf '%s' "$1" | base64 | tr -d '\n'; }
 
+# A request field: base64url in, the bytes it stands for out.
+field() {
+  local text
+  text=$(printf '%s' "$1" | tr '_-' '/+')
+  case $((${#text} % 4)) in
+    2) text="$text==" ;;
+    3) text="$text=" ;;
+  esac
+  printf '%s' "$text" | base64 $decode 2>/dev/null
+}
 
-def receive():
-    header = sys.stdin.buffer.read(4)
-    if len(header) < 4:
-        return None
-    (length,) = struct.unpack("@I", header)
-    return json.loads(sys.stdin.buffer.read(length).decode("utf-8"))
+refuse() {
+  frame "{\"type\":\"refused\",\"code\":\"$1\",\"message\":\"$2\"}"
+  exit 0
+}
 
+# The path to claude or codex: the one the installer found, or the first in
+# the usual places.
+find_tool() {
+  local name=$1 given dir IFS=:
+  if [ "$name" = claude ]; then given=${CLAUDE_BIN-}; else given=${CODEX_BIN-}; fi
+  if [ -n "$given" ] && [ -x "$given" ] && [ ! -d "$given" ]; then
+    printf '%s' "$given"
+    return 0
+  fi
+  for dir in $PATH $SEARCH; do
+    if [ -n "$dir" ] && [ -x "$dir/$name" ] && [ ! -d "$dir/$name" ]; then
+      printf '%s' "$dir/$name"
+      return 0
+    fi
+  done
+  return 1
+}
 
-def find(tool):
-    """The path to `claude` or `codex`: from the installer, or the usual places."""
-    found = os.environ.get(tool.upper() + "_BIN")
-    if found:
-        return found if os.access(found, os.X_OK) else None
-    path = os.environ.get("PATH", "") + os.pathsep + os.pathsep.join(os.path.expanduser(p) for p in COMMON_PATHS)
-    return shutil.which(tool, path=path)
+# Runs a tool in the quiet folder, with the tool's own folder first on the
+# PATH: one installed with npm needs the node beside it.
+start() {
+  local bin=$1
+  shift
+  trap - PIPE
+  cd "$work" && exec env PATH="$(dirname "$bin"):$SEARCH:$PATH" "$bin" "$@"
+}
 
+# Runs a short command with no input, for at most 15 seconds. Sets said to
+# what it printed, its output before its errors, and code to its exit code.
+quietly() {
+  local out="$tmp/said" pid dog
+  (start "$@") 3<&- </dev/null >"$out" 2>"$out.err" &
+  pid=$!
+  (
+    i=0
+    while [ $i -lt 150 ] && kill -0 "$pid" 2>/dev/null; do
+      sleep 0.1
+      i=$((i + 1))
+    done
+    kill "$pid" 2>/dev/null
+  ) >/dev/null 2>&1 &
+  dog=$!
+  wait "$pid"
+  code=$?
+  kill "$dog" 2>/dev/null
+  said=$(cat "$out" "$out.err" | head -c 4000)
+  rm -f "$out" "$out.err"
+}
 
-def environment(binary):
-    env = dict(os.environ)
-    extra = [os.path.dirname(binary)] + [os.path.expanduser(p) for p in COMMON_PATHS]
-    env["PATH"] = os.pathsep.join(extra + [env.get("PATH", "")])
-    return env
+describe() {
+  local name=$1 bin version
+  if ! bin=$(find_tool "$name"); then
+    printf null
+    return
+  fi
+  quietly "$bin" --version
+  version=$said
+  if [ "$name" = claude ]; then quietly "$bin" auth status; else quietly "$bin" login status; fi
+  printf '{"path":"%s","version":"%s","status":"%s","code":%d}' \
+    "$(base64_of "$bin")" "$(base64_of "$version")" "$(base64_of "$said")" "$code"
+}
 
+# Passes on each line the tool prints. A line too long for the browser to
+# take (1 MB) is only counted.
+relay() {
+  local line
+  while IFS= read -r line || [ -n "$line" ]; do
+    case $line in
+      '{'*'}')
+        if [ ${#line} -lt 1000000 ]; then frame "$line"; else frame "{\"type\":\"skipped\",\"bytes\":${#line}}"; fi
+        ;;
+    esac
+  done
+}
 
-def quietly(args, binary):
-    """Runs a short command, without the browser's message pipe as its input."""
-    try:
-        done = subprocess.run(
-            args, capture_output=True, text=True, timeout=15, env=environment(binary), stdin=subprocess.DEVNULL
-        )
-        return done.returncode, (done.stdout or "") + (done.stderr or "")
-    except Exception:
-        return 1, ""
+run() {
+  local engine model effort system schema input=${6-} bin
+  engine=$(field "${1-}")
+  model=$(field "${2-}")
+  effort=$(field "${3-}")
+  case $engine in claude | codex) ;; *) refuse request "Unknown engine." ;; esac
+  case $model in *[!A-Za-z0-9._:-]*) refuse request "Unknown model." ;; esac
+  case $effort in '' | low | medium | high | xhigh | max) ;; *) refuse request "Unknown effort." ;; esac
+  if ! bin=$(find_tool "$engine"); then
+    frame '{"type":"exit","code":127,"missing":true,"stderr":""}'
+    return
+  fi
+  system=$(field "${4-}")
+  schema=$(field "${5-}")
 
+  if [ "$engine" = claude ]; then
+    set -- -p --model "${model:-claude-opus-5-5}" \
+      --output-format stream-json --include-partial-messages --verbose \
+      --tools "" --strict-mcp-config --setting-sources "" --disable-slash-commands \
+      --no-session-persistence --effort "${effort:-medium}"
+    if [ -n "$system" ]; then set -- "$@" --system-prompt "$system"; fi
+    if [ -n "$schema" ]; then set -- "$@" --json-schema "$schema"; fi
+  else
+    # Your own Codex settings are for coding; Spine wants your plan's default
+    # model and nothing else. The sign-in still comes from your Codex.
+    # Codex's read-only sandbox still lets it run commands that read any
+    # file, and an article could ask it to. Without its shell, it can't.
+    set -- exec --json --skip-git-repo-check --ephemeral --ignore-user-config --ignore-rules \
+      --sandbox read-only -c features.shell_tool=false -c "model_reasoning_effort=\"${effort:-medium}\"" -C "$work"
+    if [ -n "$schema" ]; then
+      printf '%s' "$schema" >"$tmp/schema.json"
+      set -- "$@" --output-schema "$tmp/schema.json"
+    fi
+    set -- "$@" -
+  fi
 
-def work_directory():
-    # A quiet folder to run in, so nothing lands wherever the browser started us.
-    folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "work")
-    os.makedirs(folder, exist_ok=True)
-    return folder
+  mkfifo "$tmp/out"
+  # The article goes straight to the tool's input: it's never written down.
+  field "$input" | (start "$bin" "$@") 3<&- >"$tmp/out" 2>"$tmp/err" &
+  child=$!
+  # When Spine goes away, the browser closes this script's input: stop the
+  # tool too, so it doesn't use your plan for nothing.
+  (
+    cat <&3 >/dev/null
+    kill "$child" 2>/dev/null
+  ) >/dev/null 2>&1 &
+  relay <"$tmp/out"
+  wait "$child"
+  local code=$?
+  child=
+  frame "{\"type\":\"exit\",\"code\":$code,\"stderr\":\"$(tail -c 2000 "$tmp/err" | base64 | tr -d '\n')\"}"
+}
 
+main() {
+  mkdir -p "$work"
+  # Anything an earlier run couldn't clear away.
+  find "$work" -maxdepth 1 -name 'run.*' -mtime +1 -exec rm -rf {} + 2>/dev/null
+  tmp=$(mktemp -d "$work/run.XXXXXX")
+  child=
+  trap 'rm -rf "$tmp"' EXIT
+  trap '[ -n "$child" ] && kill "$child" 2>/dev/null; exit 143' TERM INT HUP
+  # The browser may stop listening first; finish quietly, and tidy up.
+  trap '' PIPE
 
-def describe_claude():
-    claude = find("claude")
-    if not claude:
-        return None
-    _, version = quietly([claude, "--version"], claude)
-    _, raw = quietly([claude, "auth", "status"], claude)
-    try:
-        status = json.loads(raw[raw.index("{"):])
-    except ValueError:
-        status = {}
-    return {
-        "path": claude,
-        "version": version.strip().splitlines()[0] if version.strip() else "",
-        "signedIn": bool(status.get("loggedIn")),
-        "plan": status.get("authMethod") or "",
-    }
+  # The browser's end of the conversation, kept apart: a job in the
+  # background would otherwise read nothing at all.
+  exec 3<&0
 
+  # One request: a JSON string of fields with nothing in them to escape.
+  local size request
+  size=$(dd bs=1 count=4 2>/dev/null | od -An -tu4 | tr -d ' \n')
+  case $size in '' | *[!0-9]*) return 0 ;; esac
+  request=$(head -c "$size")
+  case $request in
+    '{"type":"ping"}')
+      # Spine 1.2 and earlier spoke JSON to a connector written in Python.
+      # Answer its ping the way it understands, so it tries a reading and
+      # hears that it needs updating, rather than "not connected" for ever.
+      frame '{"type":"pong","host":"2","claude":{"path":"","version":"Spine needs updating","signedIn":true,"plan":""},"codex":null}'
+      return 0
+      ;;
+    '{'*)
+      frame '{"type":"error","code":"update","message":"Spine needs updating to use this connector. Download the latest Spine from cnxluc.github.io/spine."}'
+      return 0
+      ;;
+  esac
+  request=${request#\"}
+  request=${request%\"}
+  IFS=.
+  set -- $request
+  unset IFS
+  case ${1-} in
+    ping) frame "{\"type\":\"pong\",\"host\":$HOST_VERSION,\"claude\":$(describe claude),\"codex\":$(describe codex)}" ;;
+    run)
+      shift
+      run "$@"
+      ;;
+    *) refuse request "Unknown request." ;;
+  esac
+}
 
-def describe_codex():
-    codex = find("codex")
-    if not codex:
-        return None
-    _, version = quietly([codex, "--version"], codex)
-    code, status = quietly([codex, "login", "status"], codex)
-    lowered = status.lower()
-    signed_in = code == 0 and "logged in" in lowered and "not logged in" not in lowered
-    return {
-        "path": codex,
-        "version": version.strip().splitlines()[0] if version.strip() else "",
-        "signedIn": signed_in,
-        "plan": "ChatGPT" if "chatgpt" in lowered else ("API key" if "api key" in lowered else ""),
-    }
-
-
-def ping():
-    send({"type": "pong", "host": HOST_VERSION, "claude": describe_claude(), "codex": describe_codex()})
-
-
-def explain(text):
-    """A failure the reader can act on."""
-    lowered = (text or "").lower()
-    if "usage limit" in lowered or "rate limit" in lowered:
-        return "limit", "Your plan has reached its usage limit for now. Try again later."
-    if "log in" in lowered or "login" in lowered or "not logged" in lowered or "authenticat" in lowered:
-        return "login", "It isn't signed in. Run it in Terminal and sign in, then try again."
-    return "local", (text or "It couldn't read this article.").strip()[:400]
-
-
-def watch_for_goodbye(child):
-    """When Spine goes away, the browser closes our input: stop the child too."""
-
-    def watch():
-        while True:
-            if receive() is None:
-                try:
-                    child.kill()
-                finally:
-                    os._exit(0)
-
-    threading.Thread(target=watch, daemon=True).start()
-
-
-def run(request):
-    if request.get("engine") == "codex":
-        run_codex(request)
-    else:
-        run_claude(request)
-
-
-def run_claude(request):
-    claude = find("claude")
-    if not claude:
-        send({"type": "error", "code": "missing", "message": "Claude Code isn't installed on this computer."})
-        return
-    args = [
-        claude, "-p",
-        "--model", str(request.get("model") or "claude-opus-5-5"),
-        "--output-format", "stream-json",
-        "--include-partial-messages",
-        "--verbose",
-        "--tools", "",
-        "--strict-mcp-config",
-        "--setting-sources", "",
-        "--disable-slash-commands",
-        "--no-session-persistence",
-        "--effort", str(request.get("effort") or "medium"),
-    ]
-    if request.get("system"):
-        args += ["--system-prompt", request["system"]]
-    if request.get("schema"):
-        args += ["--json-schema", json.dumps(request["schema"])]
-
-    child = subprocess.Popen(
-        args,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=environment(claude),
-        cwd=work_directory(),
-    )
-
-    watch_for_goodbye(child)
-
-    child.stdin.write((request.get("user") or "").encode("utf-8"))
-    child.stdin.close()
-
-    json_text = ""
-    plain_text = ""
-    in_tool = False
-    result = None
-    for raw in child.stdout:
-        line = raw.decode("utf-8", "replace").strip()
-        if not line:
-            continue
-        try:
-            message = json.loads(line)
-        except ValueError:
-            continue
-        kind = message.get("type")
-        if kind == "stream_event":
-            event = message.get("event") or {}
-            event_type = event.get("type")
-            if event_type == "content_block_start":
-                in_tool = (event.get("content_block") or {}).get("type") == "tool_use"
-            elif event_type == "content_block_stop":
-                in_tool = False
-            elif event_type == "content_block_delta":
-                delta = event.get("delta") or {}
-                if in_tool and delta.get("type") == "input_json_delta":
-                    json_text += delta.get("partial_json", "")
-                    send({"type": "delta", "text": delta.get("partial_json", "")})
-                elif delta.get("type") == "text_delta":
-                    plain_text += delta.get("text", "")
-        elif kind == "result":
-            result = message
-    child.wait()
-    stderr = child.stderr.read().decode("utf-8", "replace")
-
-    if not result or result.get("is_error"):
-        code, text = explain((result or {}).get("result") or stderr or "Claude Code stopped with code %s." % child.returncode)
-        send({"type": "error", "code": code, "message": text})
-        return
-    text = json_text
-    if not text and result.get("structured_output") is not None:
-        text = json.dumps(result["structured_output"])
-    send({"type": "done", "text": text or plain_text, "usage": result.get("usage") or {}})
-
-
-def run_codex(request):
-    codex = find("codex")
-    if not codex:
-        send({"type": "error", "code": "missing", "message": "Codex isn't installed on this computer."})
-        return
-    work = work_directory()
-    schema_file = None
-    args = [
-        codex, "exec",
-        "--json",
-        "--skip-git-repo-check",
-        "--ephemeral",
-        # The reader's own Codex settings are for coding; Spine wants the plan's
-        # default model and nothing else. Sign-in still comes from their Codex.
-        "--ignore-user-config",
-        "--ignore-rules",
-        "--sandbox", "read-only",
-        "-c", 'model_reasoning_effort="%s"' % (request.get("effort") or "medium"),
-        "-C", work,
-    ]
-    if request.get("schema"):
-        handle, schema_file = tempfile.mkstemp(prefix="spine-", suffix=".json", dir=work)
-        with os.fdopen(handle, "w") as written:
-            json.dump(request["schema"], written)
-        args += ["--output-schema", schema_file]
-    args.append("-")
-    # Codex has no separate system prompt, so the instructions lead the prompt.
-    prompt = "%s\n\nAnswer with the JSON only. Don't run commands or read files: everything you need is below.\n\n%s" % (
-        request.get("system") or "",
-        request.get("user") or "",
-    )
-    child = subprocess.Popen(
-        args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment(codex), cwd=work
-    )
-    watch_for_goodbye(child)
-    child.stdin.write(prompt.encode("utf-8"))
-    child.stdin.close()
-
-    answer = ""
-    usage = {}
-    failure = ""
-    for raw in child.stdout:
-        line = raw.decode("utf-8", "replace").strip()
-        if not line:
-            continue
-        try:
-            event = json.loads(line)
-        except ValueError:
-            continue
-        kind = event.get("type")
-        item = event.get("item") or {}
-        if kind == "item.completed" and item.get("type") == "agent_message":
-            answer = item.get("text") or ""
-        elif kind == "turn.completed":
-            usage = event.get("usage") or {}
-        elif kind == "turn.failed":
-            failure = (event.get("error") or {}).get("message") or failure
-        elif kind == "error":
-            failure = event.get("message") or failure
-    child.wait()
-    stderr = child.stderr.read().decode("utf-8", "replace")
-    if schema_file:
-        try:
-            os.remove(schema_file)
-        except OSError:
-            pass
-    if failure or not answer:
-        code, text = explain(failure or stderr or "Codex stopped with code %s." % child.returncode)
-        send({"type": "error", "code": code, "message": text})
-        return
-    # Codex answers all at once; send it as one piece, then the whole.
-    send({"type": "delta", "text": answer})
-    send({"type": "done", "text": answer, "usage": usage})
-
-
-def main():
-    request = receive()
-    if not request:
-        return
-    if request.get("type") == "ping":
-        ping()
-    elif request.get("type") == "run":
-        run(request)
-    else:
-        send({"type": "error", "code": "request", "message": "Unknown request."})
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as error:  # Never leave Spine waiting.
-        send({"type": "error", "code": "host", "message": str(error)[:400]})
-    finally:
-        # The goodbye watcher may still be reading our input. A normal exit
-        # can't close it and Python aborts with a crash report. Every reply is
-        # already flushed, so leave at once.
-        os._exit(0)
+# Bash reads a script as it runs it. Running main, and exiting, from one last
+# line means the whole file is read first, so an update can't change it
+# mid-run.
+main "$@"; exit
 SPINE_HOST
-{
-  printf '#!/bin/sh\n'
-  [ -n "$CLAUDE" ] && printf 'export CLAUDE_BIN="%s"\n' "$CLAUDE"
-  [ -n "$CODEX" ] && printf 'export CODEX_BIN="%s"\n' "$CODEX"
-  printf 'exec "%s" "%s"\n' "$PYTHON" "$HOME_DIR/spine_host.py"
-} > "$HOME_DIR/spine-host"
-chmod 755 "$HOME_DIR/spine-host"
+  chmod 755 "$host_file.new"
+  mv -f "$host_file.new" "$host_file"
+  {
+    printf '#!%s\n' "$BASH"
+    printf '# Starts Spine'"'"'s connector with the tools the installer found.\n'
+    if [ -n "$CLAUDE" ]; then printf 'export CLAUDE_BIN=%q\n' "$CLAUDE"; fi
+    if [ -n "$CODEX" ]; then printf 'export CODEX_BIN=%q\n' "$CODEX"; fi
+    printf 'exec %q %q "$@"\n' "$BASH" "$host_file"
+  } >"$wrapper.new"
+  chmod 755 "$wrapper.new"
+  mv -f "$wrapper.new" "$wrapper"
 
-ORIGINS=""
-for id in "${IDS[@]}"; do ORIGINS="$ORIGINS${ORIGINS:+, }\"chrome-extension://$id/\""; done
-MANIFEST="{
+  for id in "${IDS[@]}"; do origins="$origins${origins:+, }\"chrome-extension://$id/\""; done
+  manifest="{
   \"name\": \"$NAME\",
   \"description\": \"Spine: read with Claude Code or Codex on this computer\",
-  \"path\": \"$HOME_DIR/spine-host\",
+  \"path\": \"$wrapper\",
   \"type\": \"stdio\",
-  \"allowed_origins\": [$ORIGINS]
+  \"allowed_origins\": [$origins]
 }"
+  CONNECTED=()
+  for browser in "${BROWSERS[@]}"; do
+    [ -d "$DATA/$browser" ] || continue
+    mkdir -p "$DATA/$browser/NativeMessagingHosts"
+    printf '%s\n' "$manifest" >"$DATA/$browser/NativeMessagingHosts/$NAME.json.new"
+    mv -f "$DATA/$browser/NativeMessagingHosts/$NAME.json.new" "$DATA/$browser/NativeMessagingHosts/$NAME.json"
+    CONNECTED+=("$(browser_name "$browser")")
+  done
+  [ ${#CONNECTED[@]} -gt 0 ] || fail "no supported browser found. Spine works in Chrome, Arc, Brave, Edge, Vivaldi, Dia and Aside."
+}
 
-CONNECTED=()
-for browser in "${BROWSERS[@]}"; do
-  [ -d "$DATA/$browser" ] || continue
-  mkdir -p "$DATA/$browser/NativeMessagingHosts"
-  printf '%s\n' "$MANIFEST" > "$DATA/$browser/NativeMessagingHosts/$NAME.json"
-  case "$browser" in
-    Google/Chrome) CONNECTED+=("Chrome") ;;
-    "Google/Chrome Beta") CONNECTED+=("Chrome Beta") ;;
-    "Google/Chrome Canary") CONNECTED+=("Chrome Canary") ;;
-    google-chrome) CONNECTED+=("Chrome") ;;
-    google-chrome-beta) CONNECTED+=("Chrome Beta") ;;
-    BraveSoftware/*) CONNECTED+=("Brave") ;;
-    "Microsoft Edge" | microsoft-edge) CONNECTED+=("Edge") ;;
-    *) CONNECTED+=("${browser%%/*}") ;;
-  esac
-done
-[ ${#CONNECTED[@]} -gt 0 ] || fail "No supported browser found. Spine works in Chrome, Arc, Brave, Edge, Vivaldi, Dia and Aside."
+joined() {
+  local list="" last="" item
+  for item in "$@"; do
+    if [ -n "$last" ]; then list="$list${list:+, }$last"; fi
+    last="$item"
+  done
+  if [ -n "$list" ]; then printf '%s and %s' "$list" "$last"; else printf '%s' "$last"; fi
+}
 
-TOOLS=()
-[ -n "$CLAUDE" ] && TOOLS+=("Claude Code $("$CLAUDE" --version 2>/dev/null | head -1 | awk '{print $1}')")
-[ -n "$CODEX" ] && TOOLS+=("Codex $("$CODEX" --version 2>/dev/null | head -1 | awk '{print $NF}')")
-JOINED="${TOOLS[0]}"
-[ ${#TOOLS[@]} -gt 1 ] && JOINED="$JOINED and ${TOOLS[1]}"
-BROWSER_LIST="$(printf '%s, ' "${CONNECTED[@]}")"
-say "Spine is connected to $JOINED in ${BROWSER_LIST%, }."
-say "Open any article and press Option-Shift-S (Alt-Shift-S). Spine now reads on your own plan."
+main() {
+  setup_paths
+  for arg in "$@"; do
+    case "$arg" in
+      --uninstall)
+        uninstall
+        return
+        ;;
+      --yes | -y) YES=1 ;;
+    esac
+  done
+
+  say "${bold}Connecting Spine to your Claude plan${plain}"
+  CLAUDE="$(find_tool claude)"
+  CODEX="$(find_tool codex)"
+
+  if [ -z "$CLAUDE" ]; then
+    say "Spine reads through Claude Code, Anthropic's app for your Claude Pro or Max plan. It isn't on this computer yet."
+    if ask "Install Claude Code now?"; then
+      install_claude || true
+    elif [ "$TTY" = 0 ] && [ "$YES" = 0 ]; then
+      say "To install it, run: curl -fsSL https://claude.ai/install.sh | bash"
+    fi
+  fi
+
+  if [ -n "$CLAUDE" ] && ! claude_signed_in; then
+    if [ "$TTY" = 1 ] || [ "$YES" = 1 ]; then
+      sign_in_claude || say "Claude Code isn't signed in yet. Run this command again to sign in."
+    else
+      say "Claude Code isn't signed in. Run this command again in Terminal to sign in."
+    fi
+  fi
+
+  step "Connecting Spine"
+  install_connector
+
+  local ready="" browsers
+  browsers="$(joined "${CONNECTED[@]}")"
+  if [ -n "$CLAUDE" ] && claude_signed_in; then
+    ready="Claude Code $("$CLAUDE" --version </dev/null 2>/dev/null | head -1 | awk '{print $1}')"
+  fi
+  if [ -n "$CODEX" ] && "$CODEX" login status </dev/null >/dev/null 2>&1; then
+    ready="$(joined ${ready:+"$ready"} "Codex $("$CODEX" --version </dev/null 2>/dev/null | head -1 | awk '{print $NF}')")"
+  fi
+  if [ -n "$ready" ]; then
+    say "Spine is connected to $ready in $browsers."
+    say ""
+    say "${bold}Go back to Spine: it starts reading by itself.${plain}"
+    say "${dim}On another article, press Option-Shift-S (Alt-Shift-S) to open Spine.${plain}"
+  else
+    say "Spine's connector is installed in $browsers, but Claude Code isn't ready yet."
+    say "Run this command again to install Claude Code or sign in."
+  fi
+}
+
+main "$@"

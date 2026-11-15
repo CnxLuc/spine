@@ -78,7 +78,8 @@ async function continueWithChatGPT({ context, page }) {
   await check('a first article offers ChatGPT and Claude Code, right in the reader', async () => {
     const shown = await cardIn(page, 'choose');
     assert.match(shown.text, /Continue with ChatGPT/);
-    assert.match(shown.text, /Use Claude Code/);
+    assert.match(shown.text, /Use your Claude plan/);
+    assert.match(shown.text, /Pro or Max, through Claude Code/);
     assert.match(shown.text, /sends them the text of the articles you open, and nothing else/);
     await picture(page, 'onboard-choose');
   });
@@ -252,15 +253,42 @@ async function continueWithChatGPT({ context, page }) {
   const { page } = browser;
   await cardIn(page, 'choose');
 
-  await check('Use Claude Code shows the one command, and reads as soon as it’s connected', async () => {
+  await check('Use your Claude plan shows the one command, and reads as soon as it’s connected', async () => {
     await page.locator('.who-card .ob-alt').click();
     const waiting = await cardIn(page, 'claudeWaiting', /Paste this into Terminal/);
     assert.match(waiting.text, /curl -fsSL https:\/\/cnxluc\.github\.io\/spine\/connect\.sh \| bash/);
-    assert.match(waiting.text, /Waiting for Claude Code/);
+    assert.match(waiting.text, /installs Claude Code if you need it, asks you to sign in and connects Spine/);
+    assert.match(waiting.text, /Spine starts reading as soon as it’s ready/);
     await picture(page, 'onboard-claude');
     await connectLocal(browser.profile, { claude: FAKE_CLAUDE });
     await settled(page);
     assert.equal(await card(page), null);
+  });
+  await browser.context.close();
+}
+
+// On Windows, the same card, with PowerShell instead of Terminal.
+{
+  const browser = await launch();
+  const page = await browser.context.newPage();
+  // The page, and the script Spine adds to it, see a Windows browser.
+  const cdp = await browser.context.newCDPSession(page);
+  await cdp.send('Emulation.setUserAgentOverride', {
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36',
+    platform: 'Win32',
+    userAgentMetadata: { platform: 'Windows', platformVersion: '15.0.0', architecture: 'x86', model: '', mobile: false, brands: [] },
+  });
+  await setStorage(browser.worker, 'local', { chatgptTest: { issuer: fake.url, api: `${fake.url}/v1` } });
+  await page.goto(`${fake.url}/article`);
+  await toggle(browser.worker, page);
+  await check('on Windows, Use your Claude plan shows the PowerShell command', async () => {
+    await cardIn(page, 'choose');
+    await page.locator('.who-card .ob-alt').click();
+    const waiting = await cardIn(page, 'claudeWaiting', /Paste this into PowerShell and press Enter/);
+    assert.match(waiting.text, /irm https:\/\/raw\.githubusercontent\.com\/CnxLuc\/spine\/main\/docs\/connect\.ps1 \| iex/);
+    assert.match(waiting.text, /To open PowerShell, press the Windows key/);
+    assert.doesNotMatch(waiting.text, /Terminal|⌘/);
+    await picture(page, 'onboard-claude-windows');
   });
   await browser.context.close();
 }
