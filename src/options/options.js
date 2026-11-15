@@ -4,6 +4,7 @@ import { DEFAULTS, giveConsent, hasConsent, withdrawConsent } from '../content/s
 import { DEFAULT_MODEL, MODELS } from '../shared/prompts.js';
 import { money } from '../shared/pricing.js';
 import { CHATGPT_LOGO } from '../shared/brands.js';
+import { WINDOWS_COMMAND } from '../shared/commands.js';
 import { SHARE_SERVER } from '../shares.js';
 
 const $ = id => document.getElementById(id);
@@ -90,6 +91,12 @@ function showEngine(kind) {
 const platform = navigator.userAgentData?.platform ?? navigator.platform ?? '';
 $('terminal-hint').hidden = !/^mac/i.test(platform);
 $('windows-hint').hidden = !/^win/i.test(platform);
+// Windows connects through PowerShell.
+if (/^win/i.test(platform)) {
+  $('local-command').textContent = WINDOWS_COMMAND;
+  for (const shell of document.querySelectorAll('#local-setup .shell')) shell.textContent = 'PowerShell';
+  for (const enter of document.querySelectorAll('#local-setup .enter')) enter.textContent = 'Enter';
+}
 
 // Where Claude Code or Codex stands, in a line.
 function describe(element, tool, name) {

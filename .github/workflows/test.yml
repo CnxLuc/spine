@@ -1,5 +1,5 @@
-# The unit tests, including the connector and its installer, on Linux and on
-# a Mac, so the bash connector is checked against GNU and BSD tools alike.
+# The unit tests on Linux, a Mac and Windows: the bash connector against GNU
+# and BSD tools, and the Windows connector built with Windows' own compiler.
 name: Tests
 on:
   push:
@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -18,4 +18,7 @@ jobs:
           node-version: 22
       - run: npm ci --ignore-scripts
       - run: node build.mjs
-      - run: node --test test/*.test.mjs
+      - if: runner.os != 'Windows'
+        run: node --test test/*.test.mjs
+      - if: runner.os == 'Windows'
+        run: node --test test/windows.test.mjs test/notes.test.mjs test/text.test.mjs test/pricing.test.mjs

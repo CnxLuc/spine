@@ -1,6 +1,7 @@
-// The connector installer the website serves at cnxluc.github.io/spine/connect.sh:
-// tools/connect.sh with the connector (native/spine-host.sh) inside it, and the
-// ids of every Spine allowed to use it.
+// The connector installers the website serves: connect.sh for Mac and Linux,
+// with the connector (native/spine-host.sh) inside it, and connect.ps1 for
+// Windows, with the connector's source (native/SpineHost.cs) inside it. Both
+// carry the ids of every Spine allowed to use the connector.
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
@@ -25,4 +26,13 @@ export async function installer(ids) {
   return (await readFile('tools/connect.sh', 'utf8'))
     .replace('__SPINE_HOST_SH__', () => host.trimEnd())
     .replace('__SPINE_EXTENSION_IDS__', () => ids.join(' '));
+}
+
+export async function windowsInstaller(ids) {
+  const source = await readFile('native/SpineHost.cs', 'utf8');
+  // A PowerShell here-string ends at a line starting with '@.
+  if (/^'@/m.test(source)) throw new Error('native/SpineHost.cs has a line starting with \'@');
+  return (await readFile('tools/connect.ps1', 'utf8'))
+    .replace('__SPINE_HOST_CS__', () => source.trimEnd())
+    .replace('__SPINE_EXTENSION_IDS_PS__', () => ids.map(id => `'${id}'`).join(', '));
 }

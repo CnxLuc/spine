@@ -9,7 +9,7 @@ import { giveConsent } from './settings.js';
 import { icon } from './icons.js';
 import { CHATGPT_LOGO } from '../shared/brands.js';
 
-export const COMMAND = 'curl -fsSL https://cnxluc.github.io/spine/connect.sh | bash';
+import { COMMAND, WINDOWS_COMMAND } from '../shared/commands.js';
 export const MANAGE_USAGE = 'https://chatgpt.com/settings/usage';
 // How long the card watches for Claude Code before it asks to be told.
 const WATCH_FOR = 15 * 60 * 1000;
@@ -123,12 +123,15 @@ export class Onboard {
   claudeWaiting() {
     const { reason } = this.detail;
     const parts = [this.heading(icon('terminal'), 'Read on your Claude plan')];
+    const line = windows() ? WINDOWS_COMMAND : COMMAND;
+    const shell = windows() ? 'PowerShell' : 'Terminal';
+    const enter = windows() ? 'Enter' : 'Return';
     const command = () => {
       const row = el('div', 'ob-command');
-      const code = el('code', null, COMMAND);
+      const code = el('code', null, line);
       const copy = button('ob-copy', `${icon('copy')}<span>Copy</span>`, async () => {
         try {
-          await navigator.clipboard.writeText(COMMAND);
+          await navigator.clipboard.writeText(line);
           copy.querySelector('span').textContent = 'Copied';
           setTimeout(() => (copy.querySelector('span').textContent = 'Copy'), 1600);
         } catch {
@@ -146,33 +149,28 @@ export class Onboard {
     // The same command fixes every case: it installs Claude Code if it's
     // missing, signs in, and adds or updates Spine's connector.
     const why = {
-      update: 'Spine’s connection to Claude Code needs updating. Paste this into Terminal and press Return:',
-      install: 'Spine is connected, but Claude Code isn’t on this computer. Paste this into Terminal and press Return to install it:',
-      'sign-in': 'Claude Code isn’t signed in. Paste this into Terminal and press Return to sign in to your Claude account:',
+      update: `Spine’s connection to Claude Code needs updating. Paste this into ${shell} and press ${enter}:`,
+      install: `Spine is connected, but Claude Code isn’t on this computer. Paste this into ${shell} and press ${enter} to install it:`,
+      'sign-in': `Claude Code isn’t signed in. Paste this into ${shell} and press ${enter} to sign in to your Claude account:`,
     }[reason];
-    if (reason === 'windows') {
-      parts.push(el('p', 'ob-text', 'Spine can read on your Claude plan on a Mac or Linux for now. On Windows, continue with ChatGPT or use an Anthropic API key.'));
-    } else {
-      parts.push(
-        el(
-          'p',
-          'ob-text',
-          why ??
-            'Spine reads through Claude Code, Anthropic’s app for your Pro or Max plan. Paste this into Terminal and press Return: it installs Claude Code if you need it, asks you to sign in and connects Spine.',
-        ),
-        command(),
-      );
-      if (mac()) parts.push(el('p', 'ob-hint', 'To open Terminal, press ⌘ Space, type Terminal and press Return.'));
-    }
+    parts.push(
+      el(
+        'p',
+        'ob-text',
+        why ??
+          `Spine reads through Claude Code, Anthropic’s app for your Pro or Max plan. Paste this into ${shell} and press ${enter}: it installs Claude Code if you need it, asks you to sign in and connects Spine.`,
+      ),
+      command(),
+    );
+    if (mac()) parts.push(el('p', 'ob-hint', 'To open Terminal, press ⌘ Space, type Terminal and press Return.'));
+    if (windows()) parts.push(el('p', 'ob-hint', 'To open PowerShell, press the Windows key, type PowerShell and press Enter.'));
     const foot = el('p', 'ob-foot');
-    if (reason !== 'windows') {
+    if (this.detail.stopped) {
+      foot.append(button('ob-link', 'Check again', () => this.claude()));
+    } else {
       const watching = el('span', 'ob-watch');
-      if (this.detail.stopped) {
-        foot.append(button('ob-link', 'Check again', () => this.claude()));
-      } else {
-        watching.innerHTML = `${icon('loader-circle', 'icon spin')}<span>Spine starts reading as soon as it’s ready</span>`;
-        foot.append(watching);
-      }
+      watching.innerHTML = `${icon('loader-circle', 'icon spin')}<span>Spine starts reading as soon as it’s ready</span>`;
+      foot.append(watching);
     }
     foot.append(button('ob-link', 'Back', () => this.show('choose')));
     parts.push(foot);
@@ -219,11 +217,6 @@ export class Onboard {
   }
 
   async claude() {
-    // Windows can't run the connector yet: say so, and leave the choice open.
-    if (windows()) {
-      this.show('claudeWaiting', { reason: 'windows' });
-      return;
-    }
     await giveConsent();
     await chrome.storage.local.set({ engine: 'claude-code' });
     this.show('claudeWaiting', { reason: this.detail.reason ?? null });

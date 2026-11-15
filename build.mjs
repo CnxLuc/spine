@@ -14,7 +14,7 @@ import { execFileSync } from 'node:child_process';
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { extensionIds, installer } from './tools/installer.mjs';
+import { extensionIds, installer, windowsInstaller } from './tools/installer.mjs';
 
 const watch = process.argv.includes('--watch');
 const test = process.argv.includes('--test');
@@ -60,7 +60,15 @@ if (watch) {
 
 // The connector installer the website serves, with the connector inside it
 // and the ids of every Spine allowed to use it.
-if (!test) await writeFile('docs/connect.sh', await installer(await extensionIds()), { mode: 0o755 });
+if (!test) {
+  const ids = await extensionIds();
+  await writeFile('docs/connect.sh', await installer(ids), { mode: 0o755 });
+  // Windows PowerShell reads a script without a byte order mark as the local
+  // code page, not UTF-8; keep the installer's own text plain ASCII.
+  const windows = await windowsInstaller(ids);
+  if (/[^\x00-\x7f]/.test(windows.replace(/@'[\s\S]*?\n'@/, ''))) throw new Error('tools/connect.ps1 must be plain ASCII outside the connector source');
+  await writeFile('docs/connect.ps1', windows);
+}
 
 // Two zips: spine.zip to download and load unpacked, which keeps the
 // manifest's key so every copy has the id the Claude Code and Codex connector

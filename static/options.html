@@ -46,14 +46,14 @@
             </span>
           </label>
           <div class="setup" id="local-setup" hidden>
-            <span>To read on your Claude plan, paste this into Terminal and press Return. It installs Claude Code if you need it, asks you to sign in and connects Spine. You only do this once.</span>
+            <span>To read on your Claude plan, paste this into <span class="shell">Terminal</span> and press <span class="enter">Return</span>. It installs Claude Code if you need it, asks you to sign in and connects Spine. You only do this once.</span>
             <code id="local-command">curl -fsSL https://cnxluc.github.io/spine/connect.sh | bash</code>
             <span class="setup-actions">
               <button type="button" id="copy-command" class="ghost">Copy</button>
               <button type="button" id="check-again" class="ghost">Check again</button>
             </span>
             <small class="setup-hint" id="terminal-hint" hidden>To open Terminal, press ⌘ Space, type Terminal and press Return.</small>
-            <small class="setup-hint" id="windows-hint" hidden>On Windows, Spine can’t read on your Claude plan yet. Use ChatGPT or an Anthropic API key.</small>
+            <small class="setup-hint" id="windows-hint" hidden>To open PowerShell, press the Windows key, type PowerShell and press Enter.</small>
           </div>
           <label class="engine" data-engine="codex">
             <input type="radio" name="engine" value="codex" />
