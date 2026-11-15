@@ -267,6 +267,32 @@ async function continueWithChatGPT({ context, page }) {
   await browser.context.close();
 }
 
+// On Windows, the same card, with PowerShell instead of Terminal.
+{
+  const browser = await launch();
+  const page = await browser.context.newPage();
+  // The page, and the script Spine adds to it, see a Windows browser.
+  const cdp = await browser.context.newCDPSession(page);
+  await cdp.send('Emulation.setUserAgentOverride', {
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36',
+    platform: 'Win32',
+    userAgentMetadata: { platform: 'Windows', platformVersion: '15.0.0', architecture: 'x86', model: '', mobile: false, brands: [] },
+  });
+  await setStorage(browser.worker, 'local', { chatgptTest: { issuer: fake.url, api: `${fake.url}/v1` } });
+  await page.goto(`${fake.url}/article`);
+  await toggle(browser.worker, page);
+  await check('on Windows, Use your Claude plan shows the PowerShell command', async () => {
+    await cardIn(page, 'choose');
+    await page.locator('.who-card .ob-alt').click();
+    const waiting = await cardIn(page, 'claudeWaiting', /Paste this into PowerShell and press Enter/);
+    assert.match(waiting.text, /irm https:\/\/raw\.githubusercontent\.com\/CnxLuc\/spine\/main\/docs\/connect\.ps1 \| iex/);
+    assert.match(waiting.text, /To open PowerShell, press the Windows key/);
+    assert.doesNotMatch(waiting.text, /Terminal|⌘/);
+    await picture(page, 'onboard-claude-windows');
+  });
+  await browser.context.close();
+}
+
 // Claude Code already connected: the one-line question, one click.
 {
   const browser = await start({ claude: FAKE_CLAUDE });
