@@ -106,7 +106,7 @@ The command does 3 things. It asks before it installs Claude Code.
 
 Spine starts reading as soon as the command finishes. Reading counts toward your plan’s usage limits, like any other use of Claude Code.
 
-The connector runs your own, unmodified `claude -p`, signed in as you, passes the article straight to it and passes back what it prints. It needs nothing else installed: no Python and no Node. On Windows, the command builds the connector on your computer from its source, `native/SpineHost.cs`, with the C# compiler that comes with Windows. Spine never sees your Claude sign-in, and nothing runs in the background.
+The connector runs your own, unmodified `claude -p`, signed in as you, passes the article straight to it and passes back what it prints. It needs nothing else installed: no Python and no Node. On Windows, the command builds the connector on your computer from its source, `native/SpineHost.cs`, with the C# compiler that comes with Windows. If Windows' Smart App Control is on, it blocks programs built on your computer, and the command says so: use ChatGPT instead. Spine never sees your Claude sign-in, and nothing runs in the background.
 
 To remove the connector, run the same command with `bash -s -- --uninstall` on a Mac or Linux. On Windows, run `$env:SPINE_UNINSTALL = 1` in PowerShell first, then the same command.
 

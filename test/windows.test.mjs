@@ -63,7 +63,7 @@ async function read(request, env, reading) {
   return { replies, out, deltas: out.filter(m => m.type === 'delta'), end: out.at(-1) };
 }
 
-test('on Windows, a ping finds Claude Code and Codex, their versions and sign-ins', { skip: !windows }, async () => {
+test('on Windows, a ping finds Claude Code and Codex, their versions and sign-ins', { skip: !windows, timeout: 120000 }, async () => {
   const found = describe((await talk(PING))[0]);
   assert.deepEqual(found.claude, { path: FAKE, version: 'Claude Code 9.9.9', signedIn: true, plan: 'Claude Max' });
   assert.equal(found.codex.signedIn, true);
@@ -71,7 +71,7 @@ test('on Windows, a ping finds Claude Code and Codex, their versions and sign-in
   assert.equal(missing.codex, null);
 });
 
-test('on Windows, a Claude Code reading streams and every argument arrives intact', { skip: !windows }, async () => {
+test('on Windows, a Claude Code reading streams and every argument arrives intact', { skip: !windows, timeout: 120000 }, async () => {
   const article = 'The article text goes here. Ça marche, 日本語 too, with "quotes" and C:\\back\\slashes\\.\n'.repeat(3000);
   const system = 'Line one says "hello".\nLine two ends with a backslash \\';
   const schema = { type: 'object', properties: { keySentences: { type: 'array', items: { type: 'string', description: 'an id like "s12"' } } } };
@@ -89,7 +89,7 @@ test('on Windows, a Claude Code reading streams and every argument arrives intac
   assert.equal(notes.cwd, 'work');
 });
 
-test('on Windows, a Codex reading answers once, in a read-only sandbox', { skip: !windows }, async () => {
+test('on Windows, a Codex reading answers once, in a read-only sandbox', { skip: !windows, timeout: 120000 }, async () => {
   const { end } = await read({ engine: 'codex', effort: 'low', system: 'Spine’s instructions', user: 'The article text goes here.', schema: { type: 'object' } }, {}, codexReading);
   assert.equal(end.type, 'done');
   const answer = JSON.parse(end.text);
@@ -99,14 +99,14 @@ test('on Windows, a Codex reading answers once, in a read-only sandbox', { skip:
   assert.equal(answer.schema, true);
 });
 
-test('on Windows, a plan at its limit says so, and a missing tool says so', { skip: !windows }, async () => {
+test('on Windows, a plan at its limit says so, and a missing tool says so', { skip: !windows, timeout: 120000 }, async () => {
   const limit = await read({ engine: 'claude-code', user: 'x' }, { FAKE_CLAUDE_FAIL: 'limit' }, claudeReading);
   assert.deepEqual([limit.end.type, limit.end.code], ['error', 'limit']);
   const missing = await read({ engine: 'claude-code', user: 'x' }, { CLAUDE_BIN: 'C:\\nowhere\\claude.exe' }, claudeReading);
   assert.equal(missing.end.code, 'local-setup');
 });
 
-test('on Windows, when Spine goes away, the connector stops Claude Code at once', { skip: !windows }, async () => {
+test('on Windows, when Spine goes away, the connector stops Claude Code at once', { skip: !windows, timeout: 120000 }, async () => {
   const pidfile = join(place, 'slow.pid');
   const replies = await talk(runRequest({ engine: 'claude-code', user: 'x' }), { FAKE_CLAUDE_SLOW: '1', FAKE_PIDFILE: pidfile }, { closeAfter: 2500 });
   assert.ok(replies.took < 10000, `the connector took ${replies.took} ms to stop`);
@@ -114,7 +114,7 @@ test('on Windows, when Spine goes away, the connector stops Claude Code at once'
   assert.throws(() => process.kill(pid, 0), 'the fake Claude Code should be gone');
 });
 
-test('on Windows, a reading is done at the result, even if Claude Code lingers', { skip: !windows }, async () => {
+test('on Windows, a reading is done at the result, even if Claude Code lingers', { skip: !windows, timeout: 120000 }, async () => {
   const pidfile = join(place, 'linger.pid');
   const replies = await talk(runRequest({ engine: 'claude-code', user: 'x' }), { FAKE_CLAUDE_LINGER: '1', FAKE_PIDFILE: pidfile }, { closeWhen: reply => reply.type === 'result' });
   assert.equal(replies.flatMap(claudeReading()).at(-1).type, 'done');
@@ -122,7 +122,7 @@ test('on Windows, a reading is done at the result, even if Claude Code lingers',
   assert.throws(() => process.kill(Number(readFileSync(pidfile, 'utf8')), 0), 'the lingering Claude Code should be gone');
 });
 
-test('on Windows, an older Spine is told to update, and odd requests are refused', { skip: !windows }, async () => {
+test('on Windows, an older Spine is told to update, and odd requests are refused', { skip: !windows, timeout: 120000 }, async () => {
   const [pong] = await talk({ type: 'ping' });
   assert.deepEqual([pong.type, pong.claude.signedIn], ['pong', true]);
   const [old] = await talk({ type: 'run', engine: 'claude', user: 'x' });
@@ -180,19 +180,31 @@ async function serve() {
   await new Promise(done => server.listen(0, '127.0.0.1', done));
   return { server, url: `http://127.0.0.1:${server.address().port}/connect.ps1` };
 }
-function run(shell, url, env) {
-  const result = spawnSync(shell, ['-NoProfile', '-Command', `irm '${url}' | iex`], { encoding: 'utf8', env, timeout: 180000 });
-  return { ...result, said: `${result.stdout}${result.stderr}` };
+// Runs a PowerShell command without blocking this process, which serves the
+// script the command fetches.
+function powershell(shell, command, env) {
+  return new Promise(done => {
+    const child = spawn(shell, ['-NoProfile', '-Command', command], { env });
+    let said = '';
+    child.stdout.on('data', chunk => (said += chunk));
+    child.stderr.on('data', chunk => (said += chunk));
+    const timer = setTimeout(() => child.kill(), 180000);
+    child.on('close', status => {
+      clearTimeout(timer);
+      done({ status, said });
+    });
+  });
 }
+const run = (shell, url, env) => powershell(shell, `irm '${url}' | iex`, env);
 const pwsh = windows && spawnSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'], { encoding: 'utf8' }).status === 0;
 
 for (const shell of ['powershell.exe', 'pwsh']) {
-  test(`on Windows, irm | iex in ${shell} installs Claude Code, signs in and registers the connector`, { skip: !windows || (shell === 'pwsh' && !pwsh) }, async () => {
+  test(`on Windows, irm | iex in ${shell} installs Claude Code, signs in and registers the connector`, { skip: !windows || (shell === 'pwsh' && !pwsh), timeout: 240000 }, async () => {
     const saved = saveKeys();
     const { server, url } = await serve();
     try {
       const place = home();
-      const result = run(shell, url, place.env);
+      const result = await run(shell, url, place.env);
       assert.match(result.said, /Installing Claude Code, with Anthropic's installer/, result.said);
       assert.match(result.said, /Spine is connected to Claude Code 9\.9\.9 in Chrome( and Edge)?\./, result.said);
       const key = spawnSync('reg', ['query', KEYS[0], '/ve'], { encoding: 'utf8' }).stdout;
@@ -212,18 +224,18 @@ for (const shell of ['powershell.exe', 'pwsh']) {
   });
 }
 
-test('on Windows, running the command again while the connector is reading puts the new one in place', { skip: !windows }, async () => {
+test('on Windows, running the command again while the connector is reading puts the new one in place', { skip: !windows, timeout: 120000 }, async () => {
   const saved = saveKeys();
   const { server, url } = await serve();
   try {
     const place = home();
-    assert.equal(run('powershell.exe', url, place.env).status, 0);
+    assert.equal((await run('powershell.exe', url, place.env)).status, 0);
     const program = join(place.folder, 'spine-host.exe');
     const before = hash(program);
     // A slow reading keeps the connector running while the command runs again.
-    const reading = talk(runRequest({ engine: 'claude-code', user: 'x' }), { FAKE_CLAUDE_SLOW: '1', USERPROFILE: place.root }, { program, closeAfter: 20000 });
+    const reading = talk(runRequest({ engine: 'claude-code', user: 'x' }), { FAKE_CLAUDE_SLOW: '1', USERPROFILE: place.root }, { program, closeAfter: 60000 });
     await new Promise(done => setTimeout(done, 1500));
-    const again = run('powershell.exe', url, place.env);
+    const again = await run('powershell.exe', url, place.env);
     assert.match(again.said, /Spine is connected to Claude Code/, again.said);
     assert.notEqual(hash(program), before, 'the new connector is in place');
     await reading;
@@ -233,15 +245,15 @@ test('on Windows, running the command again while the connector is reading puts 
   }
 });
 
-test('on Windows, uninstalling removes the connector and its keys, once', { skip: !windows }, async () => {
+test('on Windows, uninstalling removes the connector and its keys, once', { skip: !windows, timeout: 120000 }, async () => {
   const saved = saveKeys();
   const { server, url } = await serve();
   try {
     const place = home();
-    assert.equal(run('powershell.exe', url, place.env).status, 0);
-    const gone = spawnSync('powershell.exe', ['-NoProfile', '-Command', `$env:SPINE_UNINSTALL = 1; irm '${url}' | iex; "after: [$env:SPINE_UNINSTALL]"`], { encoding: 'utf8', env: place.env });
-    assert.match(gone.stdout, /Removed Spine's connection/);
-    assert.match(gone.stdout, /after: \[\]/, 'the uninstall setting doesn’t stay on');
+    assert.equal((await run('powershell.exe', url, place.env)).status, 0);
+    const gone = await powershell('powershell.exe', `$env:SPINE_UNINSTALL = 1; irm '${url}' | iex; "after: [$env:SPINE_UNINSTALL]"`, place.env);
+    assert.match(gone.said, /Removed Spine's connection/);
+    assert.match(gone.said, /after: \[\]/, 'the uninstall setting doesn’t stay on');
     assert.ok(!existsSync(place.folder));
     assert.notEqual(spawnSync('reg', ['query', KEYS[0], '/ve']).status, 0);
   } finally {
