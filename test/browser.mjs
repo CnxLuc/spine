@@ -10,7 +10,8 @@ import { join, resolve } from 'node:path';
 // connects a browser: Chromium finds native messaging hosts in the profile's
 // own NativeMessagingHosts folder. claude and codex are the binaries the host
 // runs: the real ones, or the fakes in test/fixtures.
-export async function connectLocal(profile, { claude = null, codex = null } = {}) {
+// host runs another connector instead of this one, as [program, script].
+export async function connectLocal(profile, { claude = null, codex = null, host = null } = {}) {
   const folder = join(profile, 'NativeMessagingHosts');
   await mkdir(folder, { recursive: true });
   const wrapper = join(profile, 'spine-host');
@@ -19,7 +20,7 @@ export async function connectLocal(profile, { claude = null, codex = null } = {}
   // it doesn't find the real one.
   lines.push(`export CLAUDE_BIN="${claude ?? '/nonexistent'}"`, `export CODEX_BIN="${codex ?? '/nonexistent'}"`);
   lines.push('export SPINE_SEARCH="" PATH=/usr/bin:/bin');
-  lines.push(`exec /bin/bash "${resolve('native/spine-host.sh')}"`);
+  lines.push(host ? `exec ${host.map(part => `"${part}"`).join(' ')}` : `exec /bin/bash "${resolve('native/spine-host.sh')}"`);
   await writeFile(wrapper, `${lines.join('\n')}\n`, { mode: 0o755 });
   await writeFile(
     join(folder, 'com.spine.local.json'),

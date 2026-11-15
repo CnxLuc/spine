@@ -219,11 +219,16 @@ export class Onboard {
   }
 
   async claude() {
+    // Windows can't run the connector yet: say so, and leave the choice open.
+    if (windows()) {
+      this.show('claudeWaiting', { reason: 'windows' });
+      return;
+    }
     await giveConsent();
     await chrome.storage.local.set({ engine: 'claude-code' });
-    this.show('claudeWaiting', { reason: windows() ? 'windows' : this.detail.reason ?? null });
+    this.show('claudeWaiting', { reason: this.detail.reason ?? null });
     this.since = Date.now();
-    if (!windows()) this.watch();
+    this.watch();
   }
 
   // Checks for Claude Code every few seconds while the card waits, and reads

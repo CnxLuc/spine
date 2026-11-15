@@ -15,8 +15,9 @@ const check = async (name, fn) => {
     results.push(`✗ ${name}: ${error.message.split('\n')[0]}`);
   }
 };
-const look = async (options, { name, engine } = {}) => {
-  const { context, id } = await launch(options);
+const look = async (options, { name, engine, before } = {}) => {
+  const { context, id, profile } = await launch(options);
+  await before?.(profile);
   const page = await context.newPage();
   await page.goto(`chrome-extension://${id}/options.html`);
   if (engine) await page.evaluate(engine => chrome.storage.local.set({ engine }), engine);
@@ -74,6 +75,24 @@ await check('with no connector, Spine shows the one command to run', async () =>
   assert.equal(state.setup, true);
   assert.equal(state.engine, undefined, 'nothing chosen yet, so nothing selected');
   assert.equal(state.settings.engine, 'api');
+});
+
+// Spine 1.2's connector, written in Python, as people who connected Claude Code
+// before 1.3 still have it.
+await check('an old Python connector asks for the command again', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { mkdtemp, writeFile } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const folder = await mkdtemp(join(tmpdir(), 'spine-old-'));
+  const old = join(folder, 'spine_host.py');
+  await writeFile(old, execFileSync('git', ['show', '2db50f9:native/spine_host.py']));
+  const state = await look({}, { name: 'options-old-connector', before: async profile => {
+    const { connectLocal } = await import('./browser.mjs');
+    await connectLocal(profile, { claude: FAKE_CLAUDE, host: ['/usr/bin/python3', old] });
+  } });
+  assert.match(state.claude, /Spine’s connection needs updating\. Run the command below/);
+  assert.equal(state.setup, true);
 });
 
 console.log(results.join('\n'));
