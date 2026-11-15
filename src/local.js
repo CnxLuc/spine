@@ -168,19 +168,26 @@ export function claudeReading() {
   };
 }
 
-// Codex's JSON events: it answers all at once, as its last message.
+// Codex's JSON events: it answers all at once, as its last message. It also
+// reports errors it recovers from, such as reconnecting, so only a turn that
+// didn't complete counts as failed.
 export function codexReading() {
   let answer = '';
   let usage = {};
   let failure = '';
+  let completed = false;
   return message => {
     const kind = message?.type;
     if (kind === 'item.completed' && message.item?.type === 'agent_message') answer = message.item.text ?? '';
-    else if (kind === 'turn.completed') usage = message.usage ?? {};
-    else if (kind === 'turn.failed') failure = message.error?.message || failure;
-    else if (kind === 'error') failure = message.message || failure;
+    else if (kind === 'turn.completed') {
+      completed = true;
+      usage = message.usage ?? {};
+    } else if (kind === 'turn.failed') {
+      completed = false;
+      failure = message.error?.message || failure || 'Codex couldn’t finish.';
+    } else if (kind === 'error') failure = message.message || failure;
     else if (kind === 'exit') {
-      if (answer && !failure) return [{ type: 'delta', text: answer }, { type: 'done', text: answer, usage }];
+      if (answer && completed) return [{ type: 'delta', text: answer }, { type: 'done', text: answer, usage }];
       if (failure) return [{ type: 'error', ...explain(failure, 'Codex') }];
       return [ended(message, 'Codex')];
     }

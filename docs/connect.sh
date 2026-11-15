@@ -56,12 +56,16 @@ setup_paths() {
   case "$(uname -s)" in
     Darwin)
       DATA="$HOME/Library/Application Support"
-      HOME_DIR="$DATA/Spine"
+      # A folder no other app uses: Esoteric Software's Spine, an animation
+      # editor, keeps its backups in Application Support/Spine.
+      HOME_DIR="$DATA/com.spine.local"
+      OLD_DIR="$DATA/Spine"
       BROWSERS=("Google/Chrome" "Google/Chrome Beta" "Google/Chrome Dev" "Google/Chrome Canary" "Chromium" "Arc/User Data" "BraveSoftware/Brave-Browser" "Microsoft Edge" "Vivaldi" "Dia/User Data" "Aside" "Thorium" "Comet")
       ;;
     Linux)
       DATA="${XDG_CONFIG_HOME:-$HOME/.config}"
-      HOME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/spine"
+      HOME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/com.spine.local"
+      OLD_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/spine"
       BROWSERS=("google-chrome" "google-chrome-beta" "google-chrome-unstable" "chromium" "BraveSoftware/Brave-Browser" "microsoft-edge" "vivaldi")
       ;;
     *)
@@ -84,9 +88,22 @@ browser_name() {
   esac
 }
 
+# Spine 1.2 and 1.3.0 kept the connector in a folder named Spine, which
+# another app may share. Remove only the files the connector put there.
+tidy_old() {
+  [ -d "$OLD_DIR" ] || return 0
+  rm -f "$OLD_DIR/spine_host.py" "$OLD_DIR/spine-host" "$OLD_DIR/spine-host.sh"
+  if [ -d "$OLD_DIR/work" ]; then
+    rm -rf "$OLD_DIR/work"/run.* "$OLD_DIR/work"/spine-*.json
+    rmdir "$OLD_DIR/work" 2>/dev/null || true
+  fi
+  rmdir "$OLD_DIR" 2>/dev/null || true
+}
+
 uninstall() {
   for browser in "${BROWSERS[@]}"; do rm -f "$DATA/$browser/NativeMessagingHosts/$NAME.json"; done
   rm -rf "$HOME_DIR"
+  tidy_old
   say "Removed Spine's connection to Claude Code and Codex. Claude Code itself stays installed."
 }
 
@@ -128,9 +145,10 @@ sign_in_claude() {
 install_connector() {
   local host_file="$HOME_DIR/spine-host.sh" wrapper="$HOME_DIR/spine-host" origins="" id manifest browser
   mkdir -p "$HOME_DIR/work"
-  # Spine 1.2 and earlier used a connector written in Python.
-  rm -f "$HOME_DIR/spine_host.py"
-  cat >"$host_file" <<'SPINE_HOST'
+  tidy_old
+  # Each file is written beside its place and then moved into it, so a
+  # connector that's running right now finishes with the file it started.
+  cat >"$host_file.new" <<'SPINE_HOST'
 #!/bin/bash
 # Spine's connector: lets the Spine extension ask Claude Code or Codex on this
 # computer to read an article, so the reading runs on the reader's own Claude
@@ -310,8 +328,10 @@ run() {
   else
     # Your own Codex settings are for coding; Spine wants your plan's default
     # model and nothing else. The sign-in still comes from your Codex.
+    # Codex's read-only sandbox still lets it run commands that read any
+    # file, and an article could ask it to. Without its shell, it can't.
     set -- exec --json --skip-git-repo-check --ephemeral --ignore-user-config --ignore-rules \
-      --sandbox read-only -c "model_reasoning_effort=\"${effort:-medium}\"" -C "$work"
+      --sandbox read-only -c features.shell_tool=false -c "model_reasoning_effort=\"${effort:-medium}\"" -C "$work"
     if [ -n "$schema" ]; then
       printf '%s' "$schema" >"$tmp/schema.json"
       set -- "$@" --output-schema "$tmp/schema.json"
@@ -336,54 +356,70 @@ run() {
   frame "{\"type\":\"exit\",\"code\":$code,\"stderr\":\"$(tail -c 2000 "$tmp/err" | base64 | tr -d '\n')\"}"
 }
 
-mkdir -p "$work"
-# Anything an earlier run couldn't clear away.
-find "$work" -maxdepth 1 -name 'run.*' -mtime +1 -exec rm -rf {} + 2>/dev/null
-tmp=$(mktemp -d "$work/run.XXXXXX")
-child=
-trap 'rm -rf "$tmp"' EXIT
-trap '[ -n "$child" ] && kill "$child" 2>/dev/null; exit 143' TERM INT HUP
-# The browser may stop listening first; finish quietly, and tidy up.
-trap '' PIPE
+main() {
+  mkdir -p "$work"
+  # Anything an earlier run couldn't clear away.
+  find "$work" -maxdepth 1 -name 'run.*' -mtime +1 -exec rm -rf {} + 2>/dev/null
+  tmp=$(mktemp -d "$work/run.XXXXXX")
+  child=
+  trap 'rm -rf "$tmp"' EXIT
+  trap '[ -n "$child" ] && kill "$child" 2>/dev/null; exit 143' TERM INT HUP
+  # The browser may stop listening first; finish quietly, and tidy up.
+  trap '' PIPE
 
-# The browser's end of the conversation, kept apart: a job in the background
-# would otherwise read nothing at all.
-exec 3<&0
+  # The browser's end of the conversation, kept apart: a job in the
+  # background would otherwise read nothing at all.
+  exec 3<&0
 
-# One request: a JSON string of fields with nothing in them to escape.
-size=$(dd bs=1 count=4 2>/dev/null | od -An -tu4 | tr -d ' \n')
-case $size in '' | *[!0-9]*) exit 0 ;; esac
-request=$(head -c "$size")
-case $request in
-  '{'*)
-    # Spine 1.2 and earlier, which spoke JSON to a connector written in Python.
-    frame '{"type":"error","code":"update","message":"Spine needs updating to use this connector. Download the latest Spine from cnxluc.github.io/spine."}'
-    exit 0
-    ;;
-esac
-request=${request#\"}
-request=${request%\"}
-IFS=.
-set -- $request
-unset IFS
-case ${1-} in
-  ping) frame "{\"type\":\"pong\",\"host\":$HOST_VERSION,\"claude\":$(describe claude),\"codex\":$(describe codex)}" ;;
-  run)
-    shift
-    run "$@"
-    ;;
-  *) refuse request "Unknown request." ;;
-esac
+  # One request: a JSON string of fields with nothing in them to escape.
+  local size request
+  size=$(dd bs=1 count=4 2>/dev/null | od -An -tu4 | tr -d ' \n')
+  case $size in '' | *[!0-9]*) return 0 ;; esac
+  request=$(head -c "$size")
+  case $request in
+    '{"type":"ping"}')
+      # Spine 1.2 and earlier spoke JSON to a connector written in Python.
+      # Answer its ping the way it understands, so it tries a reading and
+      # hears that it needs updating, rather than "not connected" for ever.
+      frame '{"type":"pong","host":"2","claude":{"path":"","version":"Spine needs updating","signedIn":true,"plan":""},"codex":null}'
+      return 0
+      ;;
+    '{'*)
+      frame '{"type":"error","code":"update","message":"Spine needs updating to use this connector. Download the latest Spine from cnxluc.github.io/spine."}'
+      return 0
+      ;;
+  esac
+  request=${request#\"}
+  request=${request%\"}
+  IFS=.
+  set -- $request
+  unset IFS
+  case ${1-} in
+    ping) frame "{\"type\":\"pong\",\"host\":$HOST_VERSION,\"claude\":$(describe claude),\"codex\":$(describe codex)}" ;;
+    run)
+      shift
+      run "$@"
+      ;;
+    *) refuse request "Unknown request." ;;
+  esac
+}
+
+# Bash reads a script as it runs it. Running main, and exiting, from one last
+# line means the whole file is read first, so an update can't change it
+# mid-run.
+main "$@"; exit
 SPINE_HOST
-  chmod 755 "$host_file"
+  chmod 755 "$host_file.new"
+  mv -f "$host_file.new" "$host_file"
   {
     printf '#!%s\n' "$BASH"
     printf '# Starts Spine'"'"'s connector with the tools the installer found.\n'
     if [ -n "$CLAUDE" ]; then printf 'export CLAUDE_BIN=%q\n' "$CLAUDE"; fi
     if [ -n "$CODEX" ]; then printf 'export CODEX_BIN=%q\n' "$CODEX"; fi
     printf 'exec %q %q "$@"\n' "$BASH" "$host_file"
-  } >"$wrapper"
-  chmod 755 "$wrapper"
+  } >"$wrapper.new"
+  chmod 755 "$wrapper.new"
+  mv -f "$wrapper.new" "$wrapper"
 
   for id in "${IDS[@]}"; do origins="$origins${origins:+, }\"chrome-extension://$id/\""; done
   manifest="{
@@ -397,7 +433,8 @@ SPINE_HOST
   for browser in "${BROWSERS[@]}"; do
     [ -d "$DATA/$browser" ] || continue
     mkdir -p "$DATA/$browser/NativeMessagingHosts"
-    printf '%s\n' "$manifest" >"$DATA/$browser/NativeMessagingHosts/$NAME.json"
+    printf '%s\n' "$manifest" >"$DATA/$browser/NativeMessagingHosts/$NAME.json.new"
+    mv -f "$DATA/$browser/NativeMessagingHosts/$NAME.json.new" "$DATA/$browser/NativeMessagingHosts/$NAME.json"
     CONNECTED+=("$(browser_name "$browser")")
   done
   [ ${#CONNECTED[@]} -gt 0 ] || fail "no supported browser found. Spine works in Chrome, Arc, Brave, Edge, Vivaldi, Dia and Aside."

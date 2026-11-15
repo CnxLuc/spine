@@ -24,6 +24,10 @@ schema = json.load(open(args[args.index("--output-schema") + 1])) if "--output-s
 effort = next((a for a in args if a.startswith("model_reasoning_effort=")), "")
 answer = json.dumps({"echo": prompt.split("\n\n")[-1][:24], "lead": prompt[:20], "effort": effort,
                      "fields": sorted(schema.get("properties", {})), "ignoresConfig": "--ignore-user-config" in args,
-                     "sandbox": args[args.index("--sandbox") + 1] if "--sandbox" in args else None})
+                     "sandbox": args[args.index("--sandbox") + 1] if "--sandbox" in args else None,
+                     "noShell": "features.shell_tool=false" in args})
+if os.environ.get("FAKE_CODEX_RECONNECT") == "1":
+    # Codex reports a retry it recovers from as an error event, then carries on.
+    emit({"type": "error", "message": "Reconnecting... 1/5 (stream disconnected before completion)"})
 emit({"type": "item.completed", "item": {"id": "item_0", "type": "agent_message", "text": answer}})
 emit({"type": "turn.completed", "usage": {"input_tokens": 50, "output_tokens": 20}})

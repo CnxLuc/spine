@@ -130,7 +130,13 @@ test('a Codex reading answers once, in a read-only sandbox, ignoring the reader�
   assert.deepEqual(answer.fields, ['groupings']);
   assert.equal(answer.ignoresConfig, true);
   assert.equal(answer.sandbox, 'read-only');
+  assert.equal(answer.noShell, true, 'Codex runs without its shell, so an article can’t make it read files');
   assert.equal(end.usage.output_tokens, 20);
+});
+
+test('a Codex retry it recovers from doesn’t spoil the answer', async () => {
+  const { end } = await read({ engine: 'codex', user: 'x', schema: { type: 'object', properties: {} } }, { FAKE_CODEX_RECONNECT: '1' }, codexReading);
+  assert.equal(end.type, 'done');
 });
 
 test('Codex at its limit says so plainly', async () => {
@@ -154,7 +160,11 @@ test('it leaves nothing behind in its folder', async () => {
 });
 
 test('an older Spine is told to update, and odd requests are refused', async () => {
-  const [old] = await talk({ type: 'ping' });
+  // Spine 1.2 hears a pong it understands, so it tries a reading...
+  const [pong] = await talk({ type: 'ping' });
+  assert.deepEqual([pong.type, pong.claude.signedIn], ['pong', true]);
+  // ...and the reading says Spine needs updating.
+  const [old] = await talk({ type: 'run', engine: 'claude', user: 'x' });
   assert.deepEqual([old.type, old.code], ['error', 'update']);
   const [unknown] = await talk('hello');
   assert.equal(unknown.type, 'refused');

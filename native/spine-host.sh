@@ -177,8 +177,10 @@ run() {
   else
     # Your own Codex settings are for coding; Spine wants your plan's default
     # model and nothing else. The sign-in still comes from your Codex.
+    # Codex's read-only sandbox still lets it run commands that read any
+    # file, and an article could ask it to. Without its shell, it can't.
     set -- exec --json --skip-git-repo-check --ephemeral --ignore-user-config --ignore-rules \
-      --sandbox read-only -c "model_reasoning_effort=\"${effort:-medium}\"" -C "$work"
+      --sandbox read-only -c features.shell_tool=false -c "model_reasoning_effort=\"${effort:-medium}\"" -C "$work"
     if [ -n "$schema" ]; then
       printf '%s' "$schema" >"$tmp/schema.json"
       set -- "$@" --output-schema "$tmp/schema.json"
@@ -203,41 +205,55 @@ run() {
   frame "{\"type\":\"exit\",\"code\":$code,\"stderr\":\"$(tail -c 2000 "$tmp/err" | base64 | tr -d '\n')\"}"
 }
 
-mkdir -p "$work"
-# Anything an earlier run couldn't clear away.
-find "$work" -maxdepth 1 -name 'run.*' -mtime +1 -exec rm -rf {} + 2>/dev/null
-tmp=$(mktemp -d "$work/run.XXXXXX")
-child=
-trap 'rm -rf "$tmp"' EXIT
-trap '[ -n "$child" ] && kill "$child" 2>/dev/null; exit 143' TERM INT HUP
-# The browser may stop listening first; finish quietly, and tidy up.
-trap '' PIPE
+main() {
+  mkdir -p "$work"
+  # Anything an earlier run couldn't clear away.
+  find "$work" -maxdepth 1 -name 'run.*' -mtime +1 -exec rm -rf {} + 2>/dev/null
+  tmp=$(mktemp -d "$work/run.XXXXXX")
+  child=
+  trap 'rm -rf "$tmp"' EXIT
+  trap '[ -n "$child" ] && kill "$child" 2>/dev/null; exit 143' TERM INT HUP
+  # The browser may stop listening first; finish quietly, and tidy up.
+  trap '' PIPE
 
-# The browser's end of the conversation, kept apart: a job in the background
-# would otherwise read nothing at all.
-exec 3<&0
+  # The browser's end of the conversation, kept apart: a job in the
+  # background would otherwise read nothing at all.
+  exec 3<&0
 
-# One request: a JSON string of fields with nothing in them to escape.
-size=$(dd bs=1 count=4 2>/dev/null | od -An -tu4 | tr -d ' \n')
-case $size in '' | *[!0-9]*) exit 0 ;; esac
-request=$(head -c "$size")
-case $request in
-  '{'*)
-    # Spine 1.2 and earlier, which spoke JSON to a connector written in Python.
-    frame '{"type":"error","code":"update","message":"Spine needs updating to use this connector. Download the latest Spine from cnxluc.github.io/spine."}'
-    exit 0
-    ;;
-esac
-request=${request#\"}
-request=${request%\"}
-IFS=.
-set -- $request
-unset IFS
-case ${1-} in
-  ping) frame "{\"type\":\"pong\",\"host\":$HOST_VERSION,\"claude\":$(describe claude),\"codex\":$(describe codex)}" ;;
-  run)
-    shift
-    run "$@"
-    ;;
-  *) refuse request "Unknown request." ;;
-esac
+  # One request: a JSON string of fields with nothing in them to escape.
+  local size request
+  size=$(dd bs=1 count=4 2>/dev/null | od -An -tu4 | tr -d ' \n')
+  case $size in '' | *[!0-9]*) return 0 ;; esac
+  request=$(head -c "$size")
+  case $request in
+    '{"type":"ping"}')
+      # Spine 1.2 and earlier spoke JSON to a connector written in Python.
+      # Answer its ping the way it understands, so it tries a reading and
+      # hears that it needs updating, rather than "not connected" for ever.
+      frame '{"type":"pong","host":"2","claude":{"path":"","version":"Spine needs updating","signedIn":true,"plan":""},"codex":null}'
+      return 0
+      ;;
+    '{'*)
+      frame '{"type":"error","code":"update","message":"Spine needs updating to use this connector. Download the latest Spine from cnxluc.github.io/spine."}'
+      return 0
+      ;;
+  esac
+  request=${request#\"}
+  request=${request%\"}
+  IFS=.
+  set -- $request
+  unset IFS
+  case ${1-} in
+    ping) frame "{\"type\":\"pong\",\"host\":$HOST_VERSION,\"claude\":$(describe claude),\"codex\":$(describe codex)}" ;;
+    run)
+      shift
+      run "$@"
+      ;;
+    *) refuse request "Unknown request." ;;
+  esac
+}
+
+# Bash reads a script as it runs it. Running main, and exiting, from one last
+# line means the whole file is read first, so an update can't change it
+# mid-run.
+main "$@"; exit

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { PING, describe } from '../src/local.js';
@@ -24,8 +24,9 @@ function home({ claude = true, codex = false } = {}) {
   mkdirSync(bin);
   if (claude) execFileSync('cp', [resolve('test/fixtures/fake-claude'), join(bin, 'claude')]);
   if (codex) execFileSync('cp', [resolve('test/fixtures/fake-codex'), join(bin, 'codex')]);
-  const folder = mac ? join(data, 'Spine') : join(root, '.local/share/spine');
-  return { root, data, bin, folder, manifest: browser => join(data, browser, 'NativeMessagingHosts/com.spine.local.json') };
+  const folder = mac ? join(data, 'com.spine.local') : join(root, '.local/share/com.spine.local');
+  const old = mac ? join(data, 'Spine') : join(root, '.local/share/spine');
+  return { root, data, bin, folder, old, manifest: browser => join(data, browser, 'NativeMessagingHosts/com.spine.local.json') };
 }
 function connect(place, args = [], env = {}) {
   const run = spawnSync('/bin/bash', [script, ...args], {
@@ -100,17 +101,35 @@ test('with no one to ask, it installs nothing but the connector, and says what�
   assert.equal((await ping(place)).claude, null);
 });
 
-test('it replaces the Python connector from Spine 1.2, and uninstalls cleanly', async () => {
+test('it replaces the Python connector from Spine 1.2, and leaves another app’s Spine folder alone', async () => {
   const place = home();
-  mkdirSync(place.folder, { recursive: true });
-  writeFileSync(join(place.folder, 'spine_host.py'), '# old');
+  // Spine 1.2's connector shared its folder with Esoteric Software's Spine,
+  // an animation editor that keeps its backups there.
+  mkdirSync(join(place.old, 'work'), { recursive: true });
+  mkdirSync(join(place.old, 'backups'), { recursive: true });
+  writeFileSync(join(place.old, 'spine_host.py'), '# old');
+  writeFileSync(join(place.old, 'spine-host'), '#!/bin/sh');
+  writeFileSync(join(place.old, 'backups', 'hero.json'), '{}');
   assert.equal(connect(place).status, 0);
-  assert.ok(!existsSync(join(place.folder, 'spine_host.py')));
+  assert.ok(!existsSync(join(place.old, 'spine_host.py')));
+  assert.ok(!existsSync(join(place.old, 'spine-host')));
+  assert.ok(!existsSync(join(place.old, 'work')));
+  assert.ok(existsSync(join(place.old, 'backups', 'hero.json')), 'the other app’s backup stays');
   assert.ok(existsSync(join(place.folder, 'spine-host.sh')));
   const gone = connect(place, ['--uninstall']);
   assert.match(gone.said, /Removed Spine's connection/);
   assert.ok(!existsSync(place.folder));
   assert.ok(!existsSync(place.manifest(mac ? 'Google/Chrome' : 'google-chrome')));
+  assert.ok(existsSync(join(place.old, 'backups', 'hero.json')), 'and stays after uninstalling');
+});
+
+test('updating replaces the connector’s files rather than rewriting them, so a running one isn’t disturbed', async () => {
+  const place = home();
+  assert.equal(connect(place).status, 0);
+  const before = statSync(join(place.folder, 'spine-host.sh')).ino;
+  assert.equal(connect(place).status, 0);
+  assert.notEqual(statSync(join(place.folder, 'spine-host.sh')).ino, before);
+  assert.deepEqual(readdirSync(place.folder).filter(name => name.endsWith('.new')), []);
 });
 
 test('with no browser it knows, it says so', () => {

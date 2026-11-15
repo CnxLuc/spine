@@ -56,12 +56,16 @@ setup_paths() {
   case "$(uname -s)" in
     Darwin)
       DATA="$HOME/Library/Application Support"
-      HOME_DIR="$DATA/Spine"
+      # A folder no other app uses: Esoteric Software's Spine, an animation
+      # editor, keeps its backups in Application Support/Spine.
+      HOME_DIR="$DATA/com.spine.local"
+      OLD_DIR="$DATA/Spine"
       BROWSERS=("Google/Chrome" "Google/Chrome Beta" "Google/Chrome Dev" "Google/Chrome Canary" "Chromium" "Arc/User Data" "BraveSoftware/Brave-Browser" "Microsoft Edge" "Vivaldi" "Dia/User Data" "Aside" "Thorium" "Comet")
       ;;
     Linux)
       DATA="${XDG_CONFIG_HOME:-$HOME/.config}"
-      HOME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/spine"
+      HOME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/com.spine.local"
+      OLD_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/spine"
       BROWSERS=("google-chrome" "google-chrome-beta" "google-chrome-unstable" "chromium" "BraveSoftware/Brave-Browser" "microsoft-edge" "vivaldi")
       ;;
     *)
@@ -84,9 +88,22 @@ browser_name() {
   esac
 }
 
+# Spine 1.2 and 1.3.0 kept the connector in a folder named Spine, which
+# another app may share. Remove only the files the connector put there.
+tidy_old() {
+  [ -d "$OLD_DIR" ] || return 0
+  rm -f "$OLD_DIR/spine_host.py" "$OLD_DIR/spine-host" "$OLD_DIR/spine-host.sh"
+  if [ -d "$OLD_DIR/work" ]; then
+    rm -rf "$OLD_DIR/work"/run.* "$OLD_DIR/work"/spine-*.json
+    rmdir "$OLD_DIR/work" 2>/dev/null || true
+  fi
+  rmdir "$OLD_DIR" 2>/dev/null || true
+}
+
 uninstall() {
   for browser in "${BROWSERS[@]}"; do rm -f "$DATA/$browser/NativeMessagingHosts/$NAME.json"; done
   rm -rf "$HOME_DIR"
+  tidy_old
   say "Removed Spine's connection to Claude Code and Codex. Claude Code itself stays installed."
 }
 
@@ -128,20 +145,23 @@ sign_in_claude() {
 install_connector() {
   local host_file="$HOME_DIR/spine-host.sh" wrapper="$HOME_DIR/spine-host" origins="" id manifest browser
   mkdir -p "$HOME_DIR/work"
-  # Spine 1.2 and earlier used a connector written in Python.
-  rm -f "$HOME_DIR/spine_host.py"
-  cat >"$host_file" <<'SPINE_HOST'
+  tidy_old
+  # Each file is written beside its place and then moved into it, so a
+  # connector that's running right now finishes with the file it started.
+  cat >"$host_file.new" <<'SPINE_HOST'
 __SPINE_HOST_SH__
 SPINE_HOST
-  chmod 755 "$host_file"
+  chmod 755 "$host_file.new"
+  mv -f "$host_file.new" "$host_file"
   {
     printf '#!%s\n' "$BASH"
     printf '# Starts Spine'"'"'s connector with the tools the installer found.\n'
     if [ -n "$CLAUDE" ]; then printf 'export CLAUDE_BIN=%q\n' "$CLAUDE"; fi
     if [ -n "$CODEX" ]; then printf 'export CODEX_BIN=%q\n' "$CODEX"; fi
     printf 'exec %q %q "$@"\n' "$BASH" "$host_file"
-  } >"$wrapper"
-  chmod 755 "$wrapper"
+  } >"$wrapper.new"
+  chmod 755 "$wrapper.new"
+  mv -f "$wrapper.new" "$wrapper"
 
   for id in "${IDS[@]}"; do origins="$origins${origins:+, }\"chrome-extension://$id/\""; done
   manifest="{
@@ -155,7 +175,8 @@ SPINE_HOST
   for browser in "${BROWSERS[@]}"; do
     [ -d "$DATA/$browser" ] || continue
     mkdir -p "$DATA/$browser/NativeMessagingHosts"
-    printf '%s\n' "$manifest" >"$DATA/$browser/NativeMessagingHosts/$NAME.json"
+    printf '%s\n' "$manifest" >"$DATA/$browser/NativeMessagingHosts/$NAME.json.new"
+    mv -f "$DATA/$browser/NativeMessagingHosts/$NAME.json.new" "$DATA/$browser/NativeMessagingHosts/$NAME.json"
     CONNECTED+=("$(browser_name "$browser")")
   done
   [ ${#CONNECTED[@]} -gt 0 ] || fail "no supported browser found. Spine works in Chrome, Arc, Brave, Edge, Vivaldi, Dia and Aside."
