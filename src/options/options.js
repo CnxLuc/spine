@@ -4,10 +4,11 @@ import { DEFAULTS, giveConsent, hasConsent, withdrawConsent } from '../content/s
 import { DEFAULT_MODEL, MODELS } from '../shared/prompts.js';
 import { money } from '../shared/pricing.js';
 import { CHATGPT_LOGO } from '../shared/brands.js';
+import { SHARE_SERVER } from '../shares.js';
 
 const $ = id => document.getElementById(id);
 
-const local = await chrome.storage.local.get(['apiKey', 'model', 'baseURL', 'engine']);
+const local = await chrome.storage.local.get(['apiKey', 'model', 'baseURL', 'engine', 'shareKey', 'shareServer']);
 const synced = { ...DEFAULTS, ...(await chrome.storage.sync.get(Object.keys(DEFAULTS))) };
 
 // The key, with a short pause before saving while you type.
@@ -50,6 +51,26 @@ for (const model of MODELS) {
 const base = $('baseURL');
 base.value = local.baseURL ?? '';
 base.addEventListener('change', () => chrome.storage.local.set({ baseURL: base.value.trim() }));
+
+// Share links: a key for the share server, and the server, when it isn't Spine's.
+const shareKey = $('shareKey');
+const shareServer = $('shareServer');
+shareKey.value = local.shareKey ?? '';
+shareServer.value = local.shareServer ?? '';
+shareServer.placeholder = SHARE_SERVER;
+shareKey.addEventListener('input', () => {
+  chrome.storage.local.set({ shareKey: shareKey.value.trim() });
+  $('share-result').textContent = '';
+});
+shareServer.addEventListener('change', () => chrome.storage.local.set({ shareServer: shareServer.value.trim() }));
+$('share-test').addEventListener('click', async () => {
+  const result = $('share-result');
+  result.className = 'result';
+  result.textContent = 'Asking the share server…';
+  const reply = await chrome.runtime.sendMessage({ type: 'spine:share-test', key: shareKey.value, server: shareServer.value });
+  result.className = `result ${reply?.ok ? 'ok' : 'fail'}`;
+  result.textContent = reply?.ok ? 'Works. The share menu can make links now.' : reply?.message ?? 'That didn’t work.';
+});
 
 // Who reads: ChatGPT, signed in here, or Claude Code or Codex on this computer,
 // on the reader's own plan; or an Anthropic API key. Unless the reader picks,

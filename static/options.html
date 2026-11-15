@@ -175,6 +175,20 @@
           <input id="baseURL" type="url" placeholder="https://api.anthropic.com" spellcheck="false" />
           <small>Leave empty for Anthropic. Only for a proxy that speaks Anthropic’s API.</small>
         </label>
+        <label class="field">
+          <span>Share key</span>
+          <div class="key-row">
+            <input id="shareKey" type="password" autocomplete="off" spellcheck="false" placeholder="The key for your share server" />
+            <button type="button" id="share-test" class="primary">Test</button>
+          </div>
+          <small id="share-result" class="result" role="status"></small>
+          <small>With a key, the share menu in the reader can make a link to the article you’re reading. Anyone with the link reads it in Spine’s reader, with your notes, without Spine.</small>
+        </label>
+        <label class="field">
+          <span>Share server</span>
+          <input id="shareServer" type="url" spellcheck="false" />
+          <small>Leave empty for Spine’s own. Only for a share server you run yourself.</small>
+        </label>
       </details>
 
       <footer>

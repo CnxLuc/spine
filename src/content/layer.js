@@ -20,6 +20,7 @@ export class Layer {
       'inset: 0',
       'width: 100vw',
       'height: 100vh',
+      'height: 100dvh',
       'max-width: none',
       'max-height: none',
       'margin: 0',

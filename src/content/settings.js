@@ -2,6 +2,31 @@
 // the reader between machines. The API key and saved notes live in local
 // storage instead, and only the background worker reads the key.
 
+// A shared page has no extension behind it, so there everything stays in the
+// browser's storage for that page's site.
+const PAGE = 'spine:';
+const pageStorage = {
+  async get(keys) {
+    const names =
+      keys == null
+        ? Object.keys(localStorage).flatMap(name => (name.startsWith(PAGE) ? [name.slice(PAGE.length)] : []))
+        : [keys].flat();
+    const found = {};
+    for (const name of names) {
+      const value = localStorage.getItem(PAGE + name);
+      if (value !== null) found[name] = JSON.parse(value);
+    }
+    return found;
+  },
+  async set(values) {
+    for (const [name, value] of Object.entries(values)) localStorage.setItem(PAGE + name, JSON.stringify(value));
+  },
+  async remove(keys) {
+    for (const name of [keys].flat()) localStorage.removeItem(PAGE + name);
+  },
+};
+const storage = area => globalThis.chrome?.storage?.[area] ?? pageStorage;
+
 export const DEFAULTS = {
   theme: 'auto', // auto, paper, white, sepia, dusk, night
   font: 'newsreader', // newsreader, charter, sans
@@ -23,7 +48,7 @@ export const DEFAULTS = {
 
 export async function loadSettings() {
   try {
-    const stored = await chrome.storage.sync.get(Object.keys(DEFAULTS));
+    const stored = await storage('sync').get(Object.keys(DEFAULTS));
     return { ...DEFAULTS, ...stored };
   } catch {
     return { ...DEFAULTS };
@@ -32,7 +57,7 @@ export async function loadSettings() {
 
 export async function saveSettings(changes) {
   try {
-    await chrome.storage.sync.set(changes);
+    await storage('sync').set(changes);
   } catch {
     // Storage can be unavailable; the choice still holds for this visit.
   }
@@ -44,17 +69,17 @@ export async function saveSettings(changes) {
 const CONSENT_VERSION = 1;
 export async function hasConsent() {
   try {
-    const { consent } = await chrome.storage.local.get('consent');
+    const { consent } = await storage('local').get('consent');
     return consent?.version === CONSENT_VERSION;
   } catch {
     return false;
   }
 }
 export async function giveConsent() {
-  await chrome.storage.local.set({ consent: { version: CONSENT_VERSION, at: Date.now() } });
+  await storage('local').set({ consent: { version: CONSENT_VERSION, at: Date.now() } });
 }
 export async function withdrawConsent() {
-  await chrome.storage.local.remove('consent');
+  await storage('local').remove('consent');
 }
 
 // Saved notes, keyed by the article's address. Old entries are dropped so the
@@ -66,7 +91,7 @@ const KEEP = 400;
 export async function loadNotes(url) {
   try {
     const key = NOTES_PREFIX + url;
-    return (await chrome.storage.local.get(key))[key] ?? null;
+    return (await storage('local').get(key))[key] ?? null;
   } catch {
     return null;
   }
@@ -74,13 +99,13 @@ export async function loadNotes(url) {
 
 export async function saveNotes(url, notes) {
   try {
-    await chrome.storage.local.set({ [NOTES_PREFIX + url]: { ...notes, savedAt: Date.now() } });
-    const all = await chrome.storage.local.get(null);
+    await storage('local').set({ [NOTES_PREFIX + url]: { ...notes, savedAt: Date.now() } });
+    const all = await storage('local').get(null);
     const saved = Object.entries(all)
       .filter(([key]) => key.startsWith(NOTES_PREFIX))
       .sort(([, a], [, b]) => (b.savedAt ?? 0) - (a.savedAt ?? 0));
     const stale = saved.slice(KEEP).map(([key]) => key);
-    if (stale.length) await chrome.storage.local.remove(stale);
+    if (stale.length) await storage('local').remove(stale);
   } catch (error) {
     console.warn('Spine couldn’t save notes', error);
   }
@@ -89,7 +114,7 @@ export async function saveNotes(url, notes) {
 export async function loadPosition(url) {
   try {
     const key = POSITION_PREFIX + url;
-    return (await chrome.storage.local.get(key))[key] ?? null;
+    return (await storage('local').get(key))[key] ?? null;
   } catch {
     return null;
   }
@@ -97,7 +122,7 @@ export async function loadPosition(url) {
 
 export async function savePosition(url, position) {
   try {
-    await chrome.storage.local.set({ [POSITION_PREFIX + url]: { ...position, at: Date.now() } });
+    await storage('local').set({ [POSITION_PREFIX + url]: { ...position, at: Date.now() } });
   } catch {
     // Not worth interrupting reading for.
   }

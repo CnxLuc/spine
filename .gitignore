@@ -9,3 +9,7 @@ test/.profile/
 test/out/
 test/probe.mjs
 native/work/
+share/node_modules/
+share/.vercel/
+share/public/reader/
+share/lib/build.js
