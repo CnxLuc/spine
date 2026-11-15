@@ -235,9 +235,16 @@ function readLocally(port, signal, kind, request, payload, model) {
   const reading = kind === 'codex' ? codexReading() : claudeReading();
   native.onMessage.addListener(message => {
     if (settled) return;
-    // The connector turned the request down, or is too old for this Spine.
-    const refused = message?.type === 'refused' || (message?.type === 'error' && message.code === 'update');
-    const out = refused ? [{ type: 'error', code: 'local-setup', message: `Spine’s connection to ${name} needs updating.` }] : reading(message);
+    // The connector turned the request down: one it doesn't understand means
+    // it's older than this Spine; anything else, it says why.
+    const out =
+      message?.type === 'refused'
+        ? [
+            message.code === 'request'
+              ? { type: 'error', code: 'local-setup', message: `Spine’s connection to ${name} needs updating.` }
+              : { type: 'error', code: 'local', message: `${name} couldn’t start: ${message.message}` },
+          ]
+        : reading(message);
     for (const next of out) {
       if (next.type === 'done') relay({ ...next, model: kind === 'codex' ? 'codex' : model, billing: 'plan' });
       else relay(next);

@@ -9,6 +9,9 @@ if args[:1] == ["--version"]:
     print("9.9.9 (Claude Code)")
     sys.exit(0)
 if args[:2] == ["auth", "status"]:
+    if os.environ.get("FAKE_CLAUDE_WARN") == "1":
+        sys.stderr.write("Warning: a newer version of Claude Code is available\n")
+        sys.stderr.flush()
     logged_in = os.environ.get("FAKE_CLAUDE_LOGGED_OUT") != "1" or os.path.exists(signed_in_here)
     print(json.dumps({"loggedIn": logged_in, "authMethod": "claude.ai" if logged_in else "none",
                       **({"subscriptionType": "max"} if logged_in else {})}, indent=2))
@@ -65,3 +68,6 @@ emit({"type": "stream_event", "event": {"type": "content_block_stop"}})
 print("Some line that isn't JSON", flush=True)
 emit({"type": "result", "subtype": "success", "is_error": False, "result": reply, "structured_output": json.loads(reply),
       "usage": {"input_tokens": 12, "output_tokens": 34}})
+if os.environ.get("FAKE_CLAUDE_LINGER") == "1":
+    # Claude Code has been known to stay open after its result.
+    time.sleep(30)

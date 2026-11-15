@@ -2,11 +2,11 @@
 # computer, so Spine reads on your Claude Pro or Max plan with nothing extra to
 # pay. It connects Codex too, if you have it. In PowerShell:
 #
-#   irm https://cnxluc.github.io/spine/connect.ps1 | iex
+#   irm https://raw.githubusercontent.com/CnxLuc/spine/main/docs/connect.ps1 | iex
 #
 # To remove it:
 #
-#   $env:SPINE_UNINSTALL = 1; irm https://cnxluc.github.io/spine/connect.ps1 | iex
+#   $env:SPINE_UNINSTALL = 1; irm https://raw.githubusercontent.com/CnxLuc/spine/main/docs/connect.ps1 | iex
 #
 # 1. If Claude Code isn't installed, it offers to install it with Anthropic's
 #    own installer (claude.ai/install.ps1).
@@ -27,8 +27,10 @@ function Connect-Spine {
   $Ids = @('hbaekihlobpbmhciebgibgeljinadcib')
   if ($env:SPINE_EXTENSION_IDS) { $Ids += $env:SPINE_EXTENSION_IDS -split ',' }
   $Installer = if ($env:SPINE_CLAUDE_INSTALLER) { $env:SPINE_CLAUDE_INSTALLER } else { 'https://claude.ai/install.ps1' }
-  $Folder = Join-Path $env:LOCALAPPDATA 'Spine'
-  # Where each browser looks for connectors. Chrome's channels share one.
+  # A folder no other app uses.
+  $Folder = Join-Path $env:LOCALAPPDATA $Name
+  # Chrome's key is the one every Chromium browser falls back to; Edge, Brave,
+  # Vivaldi and Chromium also have their own.
   $Browsers = [ordered]@{
     'Chrome'   = 'HKCU:\Software\Google\Chrome\NativeMessagingHosts'
     'Edge'     = 'HKCU:\Software\Microsoft\Edge\NativeMessagingHosts'
@@ -45,8 +47,10 @@ function Connect-Spine {
   }
 
   if ($env:SPINE_UNINSTALL) {
-    foreach ($key in $Browsers.Values) { Remove-Item -Path "$key\$Name" -Force -ErrorAction SilentlyContinue }
-    Remove-Item -Path $Folder -Recurse -Force -ErrorAction SilentlyContinue
+    # Only for this run: the setting would otherwise stay on in this window.
+    Remove-Item Env:SPINE_UNINSTALL -ErrorAction SilentlyContinue
+    foreach ($key in $Browsers.Values) { Remove-Item -LiteralPath "$key\$Name" -Force -ErrorAction SilentlyContinue }
+    Remove-Item -LiteralPath $Folder -Recurse -Force -ErrorAction SilentlyContinue
     Write-Host "Removed Spine's connection to Claude Code and Codex. Claude Code itself stays installed."
     return
   }
@@ -58,19 +62,34 @@ function Connect-Spine {
     $answer = Read-Host "$question [Y/n]"
     return ($answer -eq '' -or $answer -match '^(y|yes)$')
   }
+  # Claude Code's or Codex's own program. A copy installed with npm starts
+  # through a .cmd file, which can't take Spine's instructions safely, so
+  # Spine looks for the program inside the npm package instead.
   function Find-Tool($tool) {
     foreach ($place in @("$env:USERPROFILE\.local\bin\$tool.exe", "$env:LOCALAPPDATA\Programs\$tool\$tool.exe")) {
       if (Test-Path -LiteralPath $place -PathType Leaf) { return $place }
     }
     $found = Get-Command "$tool.exe" -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($found) { return $found.Source }
+    $package = @{ 'claude' = '@anthropic-ai'; 'codex' = '@openai' }[$tool]
+    $npm = Join-Path $env:APPDATA "npm\node_modules\$package"
+    if (Test-Path -LiteralPath $npm) {
+      $inside = Get-ChildItem -LiteralPath $npm -Recurse -Filter "$tool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+      if ($inside) { return $inside.FullName }
+    }
     return $null
   }
   function Test-SignedIn($claude) {
     if (-not $claude) { return $false }
     $said = (& $claude auth status 2>$null | Out-String)
-    return ($said -match '"loggedIn":\s*true')
+    return ($said -match '"loggedIn"\s*:\s*true')
   }
+  function Join-Words($words) {
+    $words = @($words)
+    if ($words.Count -gt 1) { return ($words[0..($words.Count - 2)] -join ', ') + ' and ' + $words[-1] }
+    return $words[0]
+  }
+  $utf8 = New-Object Text.UTF8Encoding $false
 
   Write-Host 'Connecting Spine to your Claude plan' -ForegroundColor White
   $claude = Find-Tool 'claude'
@@ -80,12 +99,9 @@ function Connect-Spine {
     Write-Host "Spine reads through Claude Code, Anthropic's app for your Claude Pro or Max plan. It isn't on this computer yet."
     if (Ask 'Install Claude Code now?') {
       Write-Host "`nInstalling Claude Code, with Anthropic's installer" -ForegroundColor White
-      try {
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm '$Installer' | iex"
-      } catch {
-        Write-Host "Claude Code didn't install. You can try again later with: irm https://claude.ai/install.ps1 | iex"
-      }
+      & powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm '$Installer' | iex"
       $claude = Find-Tool 'claude'
+      if (-not $claude) { Write-Host "Claude Code didn't install. You can try again later with: irm https://claude.ai/install.ps1 | iex" }
     } elseif (-not $interactive) {
       Write-Host 'To install it, run: irm https://claude.ai/install.ps1 | iex'
     }
@@ -95,7 +111,7 @@ function Connect-Spine {
     if ($interactive -or $env:SPINE_YES) {
       Write-Host "`nSigning in to Claude" -ForegroundColor White
       Write-Host 'Your browser opens Claude''s sign-in. Sign in with the account that has your Pro or Max plan, then come back here.'
-      try { & $claude auth login } catch { }
+      & $claude auth login
     } else {
       Write-Host "Claude Code isn't signed in. Run this command again in PowerShell to sign in."
     }
@@ -105,6 +121,7 @@ function Connect-Spine {
   New-Item -ItemType Directory -Force -Path (Join-Path $Folder 'work') | Out-Null
   $source = Join-Path $Folder 'SpineHost.cs'
   $program = Join-Path $Folder 'spine-host.exe'
+  $fresh = Join-Path $Folder 'spine-host.new.exe'
   [IO.File]::WriteAllText($source, @'
 // Spine's connector for Windows: native/spine-host.sh in C# 5, so that
 // Windows' own C# compiler, which comes with the .NET Framework on every
@@ -138,6 +155,17 @@ static class SpineHost
     static int Main(string[] args)
     {
         folder = AppDomain.CurrentDomain.BaseDirectory;
+        try
+        {
+            // The .NET Framework writes the console encoding's byte order mark
+            // into a tool's input before the article, if the console uses
+            // UTF-8. This encoding has no mark, and setting it leaves the
+            // console alone. The article itself goes in as raw bytes.
+            Console.InputEncoding = new UnicodeEncoding(false, false);
+        }
+        catch (Exception)
+        {
+        }
         Stream input = Console.OpenStandardInput();
         output = Console.OpenStandardOutput();
         try
@@ -149,9 +177,16 @@ static class SpineHost
             byte[] body = ReadExactly(input, size);
             if (body == null) return 0;
             string request = Encoding.ASCII.GetString(body);
+            if (request == "{\"type\":\"ping\"}")
+            {
+                // Spine 1.2 and earlier spoke JSON to a connector written in
+                // Python. Answer its ping the way it understands, so it tries a
+                // reading and hears that it needs updating.
+                Send("{\"type\":\"pong\",\"host\":\"2\",\"claude\":{\"path\":\"\",\"version\":\"Spine needs updating\",\"signedIn\":true,\"plan\":\"\"},\"codex\":null}");
+                return 0;
+            }
             if (request.StartsWith("{"))
             {
-                // Spine 1.2 and earlier, which spoke JSON to a connector written in Python.
                 Send("{\"type\":\"error\",\"code\":\"update\",\"message\":\"Spine needs updating to use this connector. Download the latest Spine from cnxluc.github.io/spine.\"}");
                 return 0;
             }
@@ -364,44 +399,72 @@ static class SpineHost
         return work;
     }
 
-    // Runs a short command with no input, for at most 15 seconds.
+    // Runs a short command with no input, for at most 15 seconds. Returns
+    // what it printed, its output before its errors, so a warning can't land
+    // in the middle of its JSON.
     static string Quietly(string bin, string[] arguments, out int code)
     {
         StringBuilder said = new StringBuilder();
+        StringBuilder warned = new StringBuilder();
+        ManualResetEvent saidAll = new ManualResetEvent(false);
+        ManualResetEvent warnedAll = new ManualResetEvent(false);
         Process process;
         try
         {
             process = Start(bin, new List<string>(arguments), WorkFolder());
         }
-        catch (Exception)
+        catch (Exception error)
         {
             code = 1;
-            return "";
+            return error.Message;
         }
-        DataReceivedEventHandler keep = delegate (object sender, DataReceivedEventArgs line)
+        process.OutputDataReceived += delegate (object sender, DataReceivedEventArgs line)
         {
-            if (line.Data == null) return;
+            if (line.Data == null)
+            {
+                saidAll.Set();
+                return;
+            }
             lock (said)
             {
                 if (said.Length < 4000) said.AppendLine(line.Data);
             }
         };
-        process.OutputDataReceived += keep;
-        process.ErrorDataReceived += keep;
+        process.ErrorDataReceived += delegate (object sender, DataReceivedEventArgs line)
+        {
+            if (line.Data == null)
+            {
+                warnedAll.Set();
+                return;
+            }
+            lock (warned)
+            {
+                if (warned.Length < 4000) warned.AppendLine(line.Data);
+            }
+        };
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
         process.StandardInput.Close();
-        if (!process.WaitForExit(15000))
+        if (process.WaitForExit(15000))
+        {
+            code = process.ExitCode;
+        }
+        else
         {
             Stop(process);
             code = 1;
         }
-        else
+        // Anything the tool started can keep its output open; don't wait on
+        // that for long.
+        saidAll.WaitOne(2000);
+        warnedAll.WaitOne(2000);
+        lock (said)
         {
-            process.WaitForExit();
-            code = process.ExitCode;
+            lock (warned)
+            {
+                return said.ToString() + warned.ToString();
+            }
         }
-        lock (said) return said.ToString();
     }
 
     // Stops a tool and anything it started.
@@ -483,9 +546,13 @@ static class SpineHost
         {
             // The reader's own Codex settings are for coding; Spine wants their
             // plan's default model and nothing else.
+            // Codex's read-only sandbox still lets it run commands that read
+            // any file, and an article could ask it to. Without its shell, it
+            // can't.
             arguments.AddRange(new string[] {
                 "exec", "--json", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "--ignore-rules",
-                "--sandbox", "read-only", "-c", "model_reasoning_effort=\"" + effort + "\"", "-C", work });
+                "--sandbox", "read-only", "-c", "features.shell_tool=false",
+                "-c", "model_reasoning_effort=\"" + effort + "\"", "-C", work });
             if (schema.Length > 0)
             {
                 schemaFile = Path.Combine(work, "schema-" + Guid.NewGuid().ToString("N") + ".json");
@@ -495,7 +562,16 @@ static class SpineHost
             arguments.Add("-");
         }
 
-        child = Start(bin, arguments, work);
+        try
+        {
+            child = Start(bin, arguments, work);
+        }
+        catch (Exception error)
+        {
+            // Windows wouldn't start it: blocked, quarantined or half updated.
+            Send("{\"type\":\"exit\",\"code\":126,\"stderr\":\"" + Base64(bin + ": " + error.Message) + "\"}");
+            return;
+        }
         StringBuilder errors = new StringBuilder();
         child.ErrorDataReceived += delegate (object sender, DataReceivedEventArgs line)
         {
@@ -571,26 +647,59 @@ static class SpineHost
         Send("{\"type\":\"exit\",\"code\":" + child.ExitCode + ",\"stderr\":\"" + Base64(tail) + "\"}");
     }
 }
-'@, (New-Object Text.UTF8Encoding $false))
+'@, $utf8)
   # Windows' own C# compiler, from the .NET Framework that comes with Windows.
   $csc = @(
     "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe",
     "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe"
   ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-  if (-not $csc) { throw "Spine: Windows' C# compiler wasn't found. Is the .NET Framework 4 turned on in Windows Features?" }
-  Remove-Item -LiteralPath $program -Force -ErrorAction SilentlyContinue
-  $built = & $csc /nologo /optimize+ /target:exe "/out:$program" $source 2>&1
-  if (-not (Test-Path -LiteralPath $program)) { throw "Spine: the connector didn't build.`n$built" }
+  if (-not $csc) {
+    Write-Host "Spine: Windows' C# compiler wasn't found. Turn on .NET Framework 4.8 in Windows Features, then run this again." -ForegroundColor Red
+    return
+  }
+  Remove-Item -LiteralPath $fresh -Force -ErrorAction SilentlyContinue
+  $built = & $csc /nologo /optimize+ /target:exe "/out:$fresh" $source 2>&1 | Out-String
+  if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $fresh)) {
+    Write-Host "Spine: the connector didn't build.`n$built" -ForegroundColor Red
+    return
+  }
+  # Windows can't replace a program that's running, but it can rename it. A
+  # connector the browser started a moment ago finishes as it was.
+  Get-ChildItem -LiteralPath $Folder -Filter 'spine-host.old-*.exe' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+  if (Test-Path -LiteralPath $program) {
+    Rename-Item -LiteralPath $program -NewName "spine-host.old-$([guid]::NewGuid().ToString('N')).exe" -ErrorAction SilentlyContinue
+  }
+  Move-Item -LiteralPath $fresh -Destination $program -Force
 
   $record = @()
   if ($claude) { $record += "CLAUDE_BIN=$claude" }
   if ($codex) { $record += "CODEX_BIN=$codex" }
-  [IO.File]::WriteAllLines((Join-Path $Folder 'spine-host.cfg'), [string[]]$record, (New-Object Text.UTF8Encoding $false))
+  [IO.File]::WriteAllLines((Join-Path $Folder 'spine-host.cfg'), [string[]]$record, $utf8)
+
+  # Ask the connector what it finds, the way the browser does. Windows' Smart
+  # App Control can refuse to run a program built on this computer.
+  $ping = Join-Path $Folder 'work\ping.in'
+  $pong = Join-Path $Folder 'work\ping.out'
+  $request = [Text.Encoding]::ASCII.GetBytes('"ping"')
+  [IO.File]::WriteAllBytes($ping, [byte[]]([BitConverter]::GetBytes([int]$request.Length) + $request))
+  $answer = ''
+  try {
+    $run = Start-Process -FilePath $program -RedirectStandardInput $ping -RedirectStandardOutput $pong -NoNewWindow -PassThru -ErrorAction Stop
+    if ($run.WaitForExit(30000) -and (Test-Path -LiteralPath $pong)) { $answer = [IO.File]::ReadAllText($pong) }
+  } catch {
+    $answer = ''
+  }
+  Remove-Item -LiteralPath $ping, $pong -Force -ErrorAction SilentlyContinue
+  if ($answer -notmatch '"type":"pong"') {
+    Write-Host "`nWindows didn't let Spine's connector run. Smart App Control, in Windows Security, blocks programs built on this computer." -ForegroundColor Red
+    Write-Host 'Spine can still read on your ChatGPT Plus or Pro plan: choose ChatGPT in Spine instead.'
+    return
+  }
 
   $manifest = Join-Path $Folder "$Name.json"
   $origins = ($Ids | ForEach-Object { "`"chrome-extension://$_/`"" }) -join ', '
   $json = "{`n  `"name`": `"$Name`",`n  `"description`": `"Spine: read with Claude Code or Codex on this computer`",`n  `"path`": $(ConvertTo-Json $program),`n  `"type`": `"stdio`",`n  `"allowed_origins`": [$origins]`n}"
-  [IO.File]::WriteAllText($manifest, $json, (New-Object Text.UTF8Encoding $false))
+  [IO.File]::WriteAllText($manifest, $json, $utf8)
 
   $connected = @()
   foreach ($browser in $Browsers.Keys) {
@@ -598,7 +707,7 @@ static class SpineHost
     if (-not $here -and $browser -ne 'Chrome') { continue }
     $key = "$($Browsers[$browser])\$Name"
     New-Item -Path $key -Force | Out-Null
-    Set-Item -Path $key -Value $manifest
+    Set-Item -LiteralPath $key -Value $manifest
     if ($here) { $connected += $browser }
   }
   if (-not $connected) { $connected = @('Chrome') }
@@ -609,9 +718,9 @@ static class SpineHost
     & $codex login status *> $null
     if ($LASTEXITCODE -eq 0) { $ready += "Codex $(((& $codex --version 2>$null) | Select-Object -First 1) -replace '^.* ', '')" }
   }
-  $browsers = if ($connected.Count -gt 1) { ($connected[0..($connected.Count - 2)] -join ', ') + ' and ' + $connected[-1] } else { $connected[0] }
+  $browsers = Join-Words $connected
   if ($ready) {
-    Write-Host "Spine is connected to $($ready -join ' and ') in $browsers."
+    Write-Host "Spine is connected to $(Join-Words $ready) in $browsers."
     Write-Host ''
     Write-Host 'Go back to Spine: it starts reading by itself.' -ForegroundColor White
     Write-Host 'On another article, press Alt+Shift+S to open Spine.'

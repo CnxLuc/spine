@@ -59,10 +59,11 @@ function claudeOf(raw) {
   const said = fromBase64(raw.status);
   let status = {};
   try {
-    status = JSON.parse(said.slice(said.indexOf('{')));
+    status = JSON.parse(said.slice(said.indexOf('{'), said.lastIndexOf('}') + 1));
   } catch {
-    // Not the JSON Claude Code prints today: read the words instead.
-    status = { loggedIn: /logged in/i.test(said) && !/not logged in/i.test(said) };
+    // Not the JSON Claude Code prints today, or a warning in the middle of
+    // it: read the words instead.
+    status = { loggedIn: /"loggedIn"\s*:\s*true/.test(said) || (/logged in/i.test(said) && !/not logged in/i.test(said)) };
   }
   const subscription = String(status.subscriptionType ?? '').toLowerCase();
   const onPlan = status.authMethod === 'claude.ai' || Boolean(subscription);
@@ -125,6 +126,8 @@ function ended({ code, stderr, missing }, name) {
 
 // Claude Code's stream-json. With a schema, Claude answers through a
 // StructuredOutput tool whose input streams as JSON; a second try starts over.
+// The reading ends with Claude Code's result line, not when it exits: it has
+// been known to linger after answering, and Spine going away stops it.
 export function claudeReading() {
   let json = '';
   let plain = '';
@@ -151,18 +154,17 @@ export function claudeReading() {
           plain += delta.text ?? '';
         }
       }
-    } else if (message?.type === 'result') {
+    } else if (message?.type === 'result' && !result) {
       result = message;
-    } else if (message?.type === 'exit') {
-      if (result && !result.is_error) {
+      if (!result.is_error) {
         const text = result.structured_output != null ? JSON.stringify(result.structured_output) : json || plain;
         out.push({ type: 'done', text, usage: result.usage ?? {} });
-      } else if (result) {
-        const said = [result.result, ...(result.errors ?? [])].filter(Boolean).join(' ');
-        out.push({ type: 'error', ...explain(said || fromBase64(message.stderr) || `Claude Code stopped with code ${message.code}.`, 'Claude Code') });
       } else {
-        out.push(ended(message, 'Claude Code'));
+        const said = [result.result, ...(result.errors ?? [])].filter(Boolean).join(' ');
+        out.push({ type: 'error', ...explain(said || `Claude Code stopped with an error (${result.subtype || 'unknown'}).`, 'Claude Code') });
       }
+    } else if (message?.type === 'exit' && !result) {
+      out.push(ended(message, 'Claude Code'));
     }
     return out;
   };
@@ -176,12 +178,19 @@ export function codexReading() {
   let usage = {};
   let failure = '';
   let completed = false;
+  let finished = false;
   return message => {
+    if (finished) return [];
     const kind = message?.type;
     if (kind === 'item.completed' && message.item?.type === 'agent_message') answer = message.item.text ?? '';
     else if (kind === 'turn.completed') {
       completed = true;
       usage = message.usage ?? {};
+      // The answer is in: done, without waiting for Codex to exit.
+      if (answer) {
+        finished = true;
+        return [{ type: 'delta', text: answer }, { type: 'done', text: answer, usage }];
+      }
     } else if (kind === 'turn.failed') {
       completed = false;
       failure = message.error?.message || failure || 'Codex couldn’t finish.';

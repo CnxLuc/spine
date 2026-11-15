@@ -30,6 +30,17 @@ static class SpineHost
     static int Main(string[] args)
     {
         folder = AppDomain.CurrentDomain.BaseDirectory;
+        try
+        {
+            // The .NET Framework writes the console encoding's byte order mark
+            // into a tool's input before the article, if the console uses
+            // UTF-8. This encoding has no mark, and setting it leaves the
+            // console alone. The article itself goes in as raw bytes.
+            Console.InputEncoding = new UnicodeEncoding(false, false);
+        }
+        catch (Exception)
+        {
+        }
         Stream input = Console.OpenStandardInput();
         output = Console.OpenStandardOutput();
         try
@@ -41,9 +52,16 @@ static class SpineHost
             byte[] body = ReadExactly(input, size);
             if (body == null) return 0;
             string request = Encoding.ASCII.GetString(body);
+            if (request == "{\"type\":\"ping\"}")
+            {
+                // Spine 1.2 and earlier spoke JSON to a connector written in
+                // Python. Answer its ping the way it understands, so it tries a
+                // reading and hears that it needs updating.
+                Send("{\"type\":\"pong\",\"host\":\"2\",\"claude\":{\"path\":\"\",\"version\":\"Spine needs updating\",\"signedIn\":true,\"plan\":\"\"},\"codex\":null}");
+                return 0;
+            }
             if (request.StartsWith("{"))
             {
-                // Spine 1.2 and earlier, which spoke JSON to a connector written in Python.
                 Send("{\"type\":\"error\",\"code\":\"update\",\"message\":\"Spine needs updating to use this connector. Download the latest Spine from cnxluc.github.io/spine.\"}");
                 return 0;
             }
@@ -256,44 +274,72 @@ static class SpineHost
         return work;
     }
 
-    // Runs a short command with no input, for at most 15 seconds.
+    // Runs a short command with no input, for at most 15 seconds. Returns
+    // what it printed, its output before its errors, so a warning can't land
+    // in the middle of its JSON.
     static string Quietly(string bin, string[] arguments, out int code)
     {
         StringBuilder said = new StringBuilder();
+        StringBuilder warned = new StringBuilder();
+        ManualResetEvent saidAll = new ManualResetEvent(false);
+        ManualResetEvent warnedAll = new ManualResetEvent(false);
         Process process;
         try
         {
             process = Start(bin, new List<string>(arguments), WorkFolder());
         }
-        catch (Exception)
+        catch (Exception error)
         {
             code = 1;
-            return "";
+            return error.Message;
         }
-        DataReceivedEventHandler keep = delegate (object sender, DataReceivedEventArgs line)
+        process.OutputDataReceived += delegate (object sender, DataReceivedEventArgs line)
         {
-            if (line.Data == null) return;
+            if (line.Data == null)
+            {
+                saidAll.Set();
+                return;
+            }
             lock (said)
             {
                 if (said.Length < 4000) said.AppendLine(line.Data);
             }
         };
-        process.OutputDataReceived += keep;
-        process.ErrorDataReceived += keep;
+        process.ErrorDataReceived += delegate (object sender, DataReceivedEventArgs line)
+        {
+            if (line.Data == null)
+            {
+                warnedAll.Set();
+                return;
+            }
+            lock (warned)
+            {
+                if (warned.Length < 4000) warned.AppendLine(line.Data);
+            }
+        };
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
         process.StandardInput.Close();
-        if (!process.WaitForExit(15000))
+        if (process.WaitForExit(15000))
+        {
+            code = process.ExitCode;
+        }
+        else
         {
             Stop(process);
             code = 1;
         }
-        else
+        // Anything the tool started can keep its output open; don't wait on
+        // that for long.
+        saidAll.WaitOne(2000);
+        warnedAll.WaitOne(2000);
+        lock (said)
         {
-            process.WaitForExit();
-            code = process.ExitCode;
+            lock (warned)
+            {
+                return said.ToString() + warned.ToString();
+            }
         }
-        lock (said) return said.ToString();
     }
 
     // Stops a tool and anything it started.
@@ -375,9 +421,13 @@ static class SpineHost
         {
             // The reader's own Codex settings are for coding; Spine wants their
             // plan's default model and nothing else.
+            // Codex's read-only sandbox still lets it run commands that read
+            // any file, and an article could ask it to. Without its shell, it
+            // can't.
             arguments.AddRange(new string[] {
                 "exec", "--json", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "--ignore-rules",
-                "--sandbox", "read-only", "-c", "model_reasoning_effort=\"" + effort + "\"", "-C", work });
+                "--sandbox", "read-only", "-c", "features.shell_tool=false",
+                "-c", "model_reasoning_effort=\"" + effort + "\"", "-C", work });
             if (schema.Length > 0)
             {
                 schemaFile = Path.Combine(work, "schema-" + Guid.NewGuid().ToString("N") + ".json");
@@ -387,7 +437,16 @@ static class SpineHost
             arguments.Add("-");
         }
 
-        child = Start(bin, arguments, work);
+        try
+        {
+            child = Start(bin, arguments, work);
+        }
+        catch (Exception error)
+        {
+            // Windows wouldn't start it: blocked, quarantined or half updated.
+            Send("{\"type\":\"exit\",\"code\":126,\"stderr\":\"" + Base64(bin + ": " + error.Message) + "\"}");
+            return;
+        }
         StringBuilder errors = new StringBuilder();
         child.ErrorDataReceived += delegate (object sender, DataReceivedEventArgs line)
         {

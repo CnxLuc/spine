@@ -54,7 +54,12 @@ static class FakeClaude
             Console.WriteLine("Logged in using ChatGPT");
             return 0;
         }
-        string input = new StreamReader(Console.OpenStandardInput(), new UTF8Encoding(false)).ReadToEnd();
+        // Raw bytes, so a byte order mark the connector shouldn't send would show.
+        MemoryStream raw = new MemoryStream();
+        Console.OpenStandardInput().CopyTo(raw);
+        byte[] bytes = raw.ToArray();
+        bool mark = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
+        string input = new UTF8Encoding(false).GetString(bytes);
         string pidFile = Environment.GetEnvironmentVariable("FAKE_PIDFILE");
         if (!string.IsNullOrEmpty(pidFile)) File.WriteAllText(pidFile, System.Diagnostics.Process.GetCurrentProcess().Id.ToString());
         if (Environment.GetEnvironmentVariable("FAKE_CLAUDE_SLOW") == "1") Thread.Sleep(30000);
@@ -68,8 +73,10 @@ static class FakeClaude
         if (codex)
         {
             string schemaFile = After(args, "--output-schema");
+            int effortAt = Array.FindIndex(args, delegate (string a) { return a.StartsWith("model_reasoning_effort="); });
             string answer = "{\"echo\":" + Json(input.Substring(input.LastIndexOf("\n\n") + 2).Substring(0, Math.Min(24, input.Length - input.LastIndexOf("\n\n") - 2))) +
-                ",\"effort\":" + Json(After(args, "-c") ?? "") + ",\"sandbox\":" + Json(After(args, "--sandbox") ?? "") +
+                ",\"effort\":" + Json(effortAt >= 0 ? args[effortAt] : "") + ",\"sandbox\":" + Json(After(args, "--sandbox") ?? "") +
+                ",\"noShell\":" + (Array.IndexOf(args, "features.shell_tool=false") >= 0 ? "true" : "false") +
                 ",\"schema\":" + (schemaFile != null && File.Exists(schemaFile) ? "true" : "false") + "}";
             emit("{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":" + Json(answer) + "}}");
             emit("{\"type\":\"turn.completed\",\"usage\":{\"output_tokens\":20}}");
@@ -81,7 +88,7 @@ static class FakeClaude
             return 1;
         }
         string reply = "{\"echo\":" + Json(input.Substring(0, Math.Min(24, input.Length))) +
-            ",\"size\":" + new UTF8Encoding(false).GetByteCount(input) +
+            ",\"size\":" + bytes.Length + ",\"mark\":" + (mark ? "true" : "false") +
             ",\"system\":" + Json(After(args, "--system-prompt") ?? "") +
             ",\"schema\":" + Json(After(args, "--json-schema") ?? "") +
             ",\"model\":" + Json(After(args, "--model") ?? "") +
@@ -94,6 +101,8 @@ static class FakeClaude
         }
         emit("{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_stop\"}}");
         emit("{\"type\":\"result\",\"is_error\":false,\"result\":" + Json(reply) + ",\"structured_output\":" + reply + ",\"usage\":{\"output_tokens\":34}}");
+        // Claude Code has been known to stay open after its result.
+        if (Environment.GetEnvironmentVariable("FAKE_CLAUDE_LINGER") == "1") Thread.Sleep(30000);
         return 0;
     }
 }

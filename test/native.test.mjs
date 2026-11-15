@@ -19,7 +19,9 @@ const ENV = { HOME, PATH: '/usr/bin:/bin', SPINE_SEARCH: '', CLAUDE_BIN: FAKE, C
 // Sends one framed message and collects every framed reply until the
 // connector exits. The browser keeps the pipe open while it listens; closing
 // it is how Spine says goodbye.
-function talk(message, env = {}, { closeAfter = null } = {}) {
+// closeWhen closes the pipe when a reply matches, as Spine does once a
+// reading is done.
+function talk(message, env = {}, { closeAfter = null, closeWhen = null } = {}) {
   return new Promise((done, fail) => {
     const started = Date.now();
     const child = spawn('/bin/bash', [HOST], { env: { ...ENV, ...env } });
@@ -30,8 +32,10 @@ function talk(message, env = {}, { closeAfter = null } = {}) {
       while (buffer.length >= 4) {
         const length = buffer.readUInt32LE(0);
         if (buffer.length < 4 + length) break;
-        replies.push(JSON.parse(buffer.subarray(4, 4 + length).toString('utf8')));
+        const reply = JSON.parse(buffer.subarray(4, 4 + length).toString('utf8'));
+        replies.push(reply);
         buffer = buffer.subarray(4 + length);
+        if (closeWhen?.(reply)) child.stdin.end();
       }
     });
     child.on('error', fail);
@@ -98,6 +102,21 @@ test('a second try at the answer starts the stream over', async () => {
   const { out, end } = await read(claude({ user: 'x' }), { FAKE_CLAUDE_RETRY: '1' }, claudeReading);
   assert.ok(out.some(m => m.type === 'restart'));
   assert.doesNotThrow(() => JSON.parse(end.text));
+});
+
+test('a reading is done at Claude Code’s result, even if it lingers, and Spine leaving stops it', async () => {
+  const pidfile = join(HOME, 'linger.pid');
+  const replies = await talk(runRequest(claude({ user: 'x' })), { FAKE_CLAUDE_LINGER: '1', FAKE_PIDFILE: pidfile }, { closeWhen: reply => reply.type === 'result' });
+  const out = replies.flatMap(claudeReading());
+  assert.equal(out.at(-1).type, 'done');
+  assert.ok(replies.took < 6000, `the connector took ${replies.took} ms`);
+  assert.throws(() => process.kill(Number(readFileSync(pidfile, 'utf8')), 0), 'the lingering Claude Code should be gone');
+});
+
+test('a warning from Claude Code doesn’t hide its sign-in', async () => {
+  const found = describe((await talk(PING, { FAKE_CLAUDE_WARN: '1' }))[0]);
+  assert.equal(found.claude.signedIn, true);
+  assert.equal(found.claude.plan, 'Claude Max');
 });
 
 test('a plan at its limit says so plainly', async () => {

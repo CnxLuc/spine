@@ -105,10 +105,10 @@ start() {
 }
 
 # Runs a short command with no input, for at most 15 seconds. Sets said to
-# what it printed and code to its exit code.
+# what it printed, its output before its errors, and code to its exit code.
 quietly() {
   local out="$tmp/said" pid dog
-  (start "$@") 3<&- </dev/null >"$out" 2>&1 &
+  (start "$@") 3<&- </dev/null >"$out" 2>"$out.err" &
   pid=$!
   (
     i=0
@@ -122,8 +122,8 @@ quietly() {
   wait "$pid"
   code=$?
   kill "$dog" 2>/dev/null
-  said=$(head -c 4000 "$out")
-  rm -f "$out"
+  said=$(cat "$out" "$out.err" | head -c 4000)
+  rm -f "$out" "$out.err"
 }
 
 describe() {
