@@ -1,18 +1,28 @@
-// The native host, driven the way the browser drives it, against a fake
-// `claude` so nothing is sent to Claude.
+// The connector, driven the way the browser drives it, against fake `claude`
+// and `codex`, so nothing is sent anywhere. The replies go through the same
+// code the extension uses to make sense of them.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { resolve } from 'node:path';
+import { existsSync, mkdtempSync, readFileSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { PING, claudeReading, codexReading, describe, runRequest } from '../src/local.js';
 
-const HOST = resolve('native/spine_host.py');
+const HOST = resolve('native/spine-host.sh');
 const FAKE = resolve('test/fixtures/fake-claude');
 const FAKE_CODEX = resolve('test/fixtures/fake-codex');
+const HOME = mkdtempSync(join(tmpdir(), 'spine-home-'));
+// Only the fakes: nothing else on this computer is found.
+const ENV = { HOME, PATH: '/usr/bin:/bin', SPINE_SEARCH: '', CLAUDE_BIN: FAKE, CODEX_BIN: FAKE_CODEX };
 
-// Sends one framed message and collects every framed reply until the host exits.
-function talk(message, env = {}) {
+// Sends one framed message and collects every framed reply until the
+// connector exits. The browser keeps the pipe open while it listens; closing
+// it is how Spine says goodbye.
+function talk(message, env = {}, { closeAfter = null } = {}) {
   return new Promise((done, fail) => {
-    const child = spawn('python3', [HOST], { env: { ...process.env, CLAUDE_BIN: FAKE, CODEX_BIN: FAKE_CODEX, ...env } });
+    const started = Date.now();
+    const child = spawn('/bin/bash', [HOST], { env: { ...ENV, ...env } });
     const replies = [];
     let buffer = Buffer.alloc(0);
     child.stdout.on('data', chunk => {
@@ -25,86 +35,131 @@ function talk(message, env = {}) {
       }
     });
     child.on('error', fail);
-    child.on('exit', () => done(replies));
+    child.on('exit', () => done(Object.assign(replies, { took: Date.now() - started, leftover: buffer.length })));
     const body = Buffer.from(JSON.stringify(message));
     const header = Buffer.alloc(4);
     header.writeUInt32LE(body.length);
     child.stdin.write(Buffer.concat([header, body]));
-    // The browser keeps the pipe open while it listens; closing it ends a run.
-    if (message.type === 'ping') child.stdin.end();
-    else setTimeout(() => child.stdin.end(), 3000);
+    if (closeAfter !== null) setTimeout(() => child.stdin.end(), closeAfter);
   });
 }
 
-test('a ping finds Claude Code and Codex, and their sign-ins', async () => {
-  const [pong] = await talk({ type: 'ping' });
-  assert.equal(pong.type, 'pong');
-  assert.deepEqual(pong.claude, { path: FAKE, version: '9.9.9 (Claude Code)', signedIn: true, plan: 'claude.ai' });
-  assert.deepEqual(pong.codex, { path: FAKE_CODEX, version: 'codex-cli 9.9.9', signedIn: true, plan: 'ChatGPT' });
+// A reading as the extension sees it: what the connector printed, made sense of.
+async function read(request, env, reading) {
+  const replies = await talk(runRequest(request), env);
+  const out = replies.flatMap(reading());
+  return { replies, out, deltas: out.filter(m => m.type === 'delta'), end: out.at(-1) };
+}
+const claude = request => ({ engine: 'claude-code', model: 'claude-opus-5-5', system: 'Be brief.', schema: { type: 'object', properties: { keySentences: {}, sections: {} } }, ...request });
+
+test('a ping finds Claude Code and Codex, their versions and sign-ins', async () => {
+  const replies = await talk(PING);
+  assert.equal(replies.length, 1);
+  const found = describe(replies[0]);
+  assert.equal(found.outdated, false);
+  assert.deepEqual(found.claude, { path: FAKE, version: 'Claude Code 9.9.9', signedIn: true, plan: 'Claude Max' });
+  assert.deepEqual(found.codex, { path: FAKE_CODEX, version: 'Codex 9.9.9', signedIn: true, plan: 'ChatGPT' });
 });
 
 test('a ping says which tool is signed out, or missing', async () => {
-  const [pong] = await talk({ type: 'ping' }, { FAKE_CLAUDE_LOGGED_OUT: '1', FAKE_CODEX_LOGGED_OUT: '1' });
-  assert.equal(pong.claude.signedIn, false);
-  assert.equal(pong.codex.signedIn, false);
-  const [missing] = await talk({ type: 'ping' }, { CODEX_BIN: '/nonexistent' });
+  const out = describe((await talk(PING, { FAKE_CLAUDE_LOGGED_OUT: '1', FAKE_CODEX_LOGGED_OUT: '1' }))[0]);
+  assert.equal(out.claude.signedIn, false);
+  assert.equal(out.codex.signedIn, false);
+  const missing = describe((await talk(PING, { CODEX_BIN: '/nonexistent' }))[0]);
   assert.equal(missing.codex, null);
   assert.equal(missing.claude.signedIn, true);
 });
 
-test('a run streams the reply and ends with all of it', async () => {
-  const replies = await talk({
-    type: 'run',
-    model: 'claude-opus-5-5',
-    system: 'Be brief.',
-    user: 'The article text goes here, sentence by sentence.',
-    schema: { type: 'object', properties: { keySentences: {}, sections: {} } },
-  });
-  const deltas = replies.filter(reply => reply.type === 'delta');
-  const done = replies.at(-1);
+test('a ping finds the tools in the usual places when the installer named none', async () => {
+  const found = describe((await talk(PING, { CLAUDE_BIN: '', CODEX_BIN: '', SPINE_SEARCH: resolve('test/fixtures/bin') }))[0]);
+  assert.equal(found.claude.path, resolve('test/fixtures/bin/claude'));
+  assert.equal(found.codex, null);
+});
+
+test('a Claude Code reading streams the notes and ends with all of them', async () => {
+  const article = 'The article text goes here, sentence by sentence. Ça marche, 日本語 too.\n'.repeat(4000);
+  const { replies, deltas, end } = await read(claude({ user: article }), {}, claudeReading);
+  assert.equal(replies.leftover, 0);
   assert.ok(deltas.length > 3, 'it should stream');
-  assert.equal(done.type, 'done');
-  assert.equal(deltas.map(delta => delta.text).join(''), done.text);
-  const parsed = JSON.parse(done.text);
-  assert.equal(parsed.echo, 'The article text goes he');
-  assert.equal(parsed.model, 'claude-opus-5-5');
-  assert.deepEqual(parsed.fields, ['keySentences', 'sections']);
-  assert.equal(done.usage.output_tokens, 34);
+  assert.equal(end.type, 'done');
+  const notes = JSON.parse(end.text);
+  assert.deepEqual(JSON.parse(deltas.map(d => d.text).join('')), notes);
+  assert.equal(notes.echo, article.slice(0, 24));
+  assert.equal(notes.size, Buffer.byteLength(article), 'every byte of the article arrives');
+  assert.equal(notes.system, 'Be brief.');
+  assert.equal(notes.model, 'claude-opus-5-5');
+  assert.equal(notes.tools, '', 'Claude Code runs with no tools');
+  assert.equal(notes.cwd, 'work', 'and in Spine’s own quiet folder');
+  assert.deepEqual(notes.fields, ['keySentences', 'sections']);
+  assert.equal(end.usage.output_tokens, 34);
+});
+
+test('a second try at the answer starts the stream over', async () => {
+  const { out, end } = await read(claude({ user: 'x' }), { FAKE_CLAUDE_RETRY: '1' }, claudeReading);
+  assert.ok(out.some(m => m.type === 'restart'));
+  assert.doesNotThrow(() => JSON.parse(end.text));
 });
 
 test('a plan at its limit says so plainly', async () => {
-  const replies = await talk({ type: 'run', user: 'x' }, { FAKE_CLAUDE_FAIL: 'limit' });
-  assert.equal(replies.at(-1).type, 'error');
-  assert.equal(replies.at(-1).code, 'limit');
-  assert.match(replies.at(-1).message, /usage limit/);
+  const { end } = await read(claude({ user: 'x' }), { FAKE_CLAUDE_FAIL: 'limit' }, claudeReading);
+  assert.deepEqual([end.type, end.code], ['error', 'limit']);
+  assert.match(end.message, /usage limit/);
 });
 
-test('a Codex run answers in one piece, without the reader’s Codex settings', async () => {
-  const replies = await talk({
-    type: 'run',
-    engine: 'codex',
-    effort: 'low',
-    system: 'Be brief.',
-    user: 'The article text goes here.',
-    schema: { type: 'object', properties: { keySentences: {}, chapters: {} } },
-  });
-  const done = replies.at(-1);
-  assert.equal(done.type, 'done');
-  assert.equal(replies.filter(reply => reply.type === 'delta').map(delta => delta.text).join(''), done.text);
-  const parsed = JSON.parse(done.text);
-  assert.equal(parsed.echo, 'The article text goes he');
-  assert.equal(parsed.effort, 'model_reasoning_effort="low"');
-  assert.deepEqual(parsed.fields, ['chapters', 'keySentences']);
-  assert.equal(parsed.ignoresConfig, true);
-  assert.equal(done.usage.output_tokens, 20);
+test('a crash passes on what Claude Code said', async () => {
+  const { end } = await read(claude({ user: 'x' }), { FAKE_CLAUDE_FAIL: 'crash' }, claudeReading);
+  assert.deepEqual([end.type, end.code], ['error', 'local']);
+  assert.match(end.message, /something broke inside Claude Code/);
+});
+
+test('a tool that isn’t installed says so', async () => {
+  const { end } = await read(claude({ user: 'x' }), { CLAUDE_BIN: '/nonexistent' }, claudeReading);
+  assert.deepEqual([end.type, end.code], ['error', 'local-setup']);
+  assert.match(end.message, /Claude Code isn’t installed/);
+});
+
+test('a Codex reading answers once, in a read-only sandbox, ignoring the reader’s Codex settings', async () => {
+  const request = { engine: 'codex', effort: 'low', system: 'Spine’s instructions', user: 'The article text goes here.', schema: { type: 'object', properties: { groupings: {} } } };
+  const { deltas, end } = await read(request, {}, codexReading);
+  assert.equal(deltas.length, 1);
+  assert.equal(end.type, 'done');
+  const answer = JSON.parse(end.text);
+  assert.equal(answer.echo, 'The article text goes he');
+  assert.equal(answer.lead, 'Spine’s instructions'.slice(0, 20));
+  assert.equal(answer.effort, 'model_reasoning_effort="low"');
+  assert.deepEqual(answer.fields, ['groupings']);
+  assert.equal(answer.ignoresConfig, true);
+  assert.equal(answer.sandbox, 'read-only');
+  assert.equal(end.usage.output_tokens, 20);
 });
 
 test('Codex at its limit says so plainly', async () => {
-  const replies = await talk({ type: 'run', engine: 'codex', user: 'x' }, { FAKE_CODEX_FAIL: 'limit' });
-  assert.equal(replies.at(-1).code, 'limit');
+  const { end } = await read({ engine: 'codex', user: 'x' }, { FAKE_CODEX_FAIL: 'limit' }, codexReading);
+  assert.deepEqual([end.type, end.code], ['error', 'limit']);
 });
 
-test('no Claude Code at all is a clear error', async () => {
-  const replies = await talk({ type: 'run', user: 'x' }, { CLAUDE_BIN: '/nonexistent', PATH: '/usr/bin:/bin', HOME: '/nonexistent' });
-  assert.equal(replies.at(-1).code, 'missing');
+test('when Spine goes away, the connector stops Claude Code at once', async () => {
+  const pidfile = join(HOME, 'slow.pid');
+  const replies = await talk(runRequest(claude({ user: 'x' })), { FAKE_CLAUDE_SLOW: '1', FAKE_PIDFILE: pidfile }, { closeAfter: 1500 });
+  assert.ok(replies.took < 6000, `the connector took ${replies.took} ms to stop`);
+  const pid = Number(readFileSync(pidfile, 'utf8'));
+  assert.throws(() => process.kill(pid, 0), 'the fake Claude Code should be gone');
+});
+
+test('it leaves nothing behind in its folder', async () => {
+  await talk(runRequest(claude({ user: 'x' })));
+  await talk(PING);
+  assert.ok(existsSync(resolve('native/work')));
+  assert.deepEqual(readdirSync(resolve('native/work')).filter(name => name.startsWith('run.')), []);
+});
+
+test('an older Spine is told to update, and odd requests are refused', async () => {
+  const [old] = await talk({ type: 'ping' });
+  assert.deepEqual([old.type, old.code], ['error', 'update']);
+  const [unknown] = await talk('hello');
+  assert.equal(unknown.type, 'refused');
+  const [engine] = await talk(runRequest({ engine: 'claude-code', user: 'x' }).replace(/^run\.[^.]+/, 'run.' + Buffer.from('rm').toString('base64url')));
+  assert.match(engine.message, /Unknown engine/);
+  const [model] = await talk(runRequest({ engine: 'claude-code', model: 'opus; rm -rf ~', user: 'x' }));
+  assert.match(model.message, /Unknown model/);
 });

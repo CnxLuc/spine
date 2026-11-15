@@ -1,0 +1,145 @@
+/* The page Spine opens once, when it's installed. Built on options.css. */
+.welcome .masthead {
+  margin-bottom: 26px;
+}
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.step {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 14px;
+}
+.step h2 {
+  margin-top: 2px;
+}
+.step p {
+  margin: 8px 0 0;
+  color: var(--ink-2);
+}
+.step ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: var(--ink-2);
+}
+.step li + li {
+  margin-top: 4px;
+}
+.number {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--bg);
+  font: 600 15px/1 Newsreader, Georgia, serif;
+}
+.glyph {
+  width: 17px;
+  height: 17px;
+  vertical-align: -3px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.done-line {
+  display: none;
+  color: var(--good) !important;
+  font-weight: 500;
+}
+#pin-step.done .number {
+  background: var(--good);
+}
+#pin-step.done .done-line {
+  display: block;
+}
+#pin-step.done .todo,
+#pin-step.done .toolbar {
+  display: none;
+}
+.toolbar {
+  display: block;
+  width: 100%;
+  max-width: 520px;
+  height: auto;
+  margin-top: 16px;
+}
+.toolbar .bar {
+  fill: var(--raised);
+  stroke: var(--line);
+}
+.toolbar .field {
+  fill: var(--chip);
+}
+.toolbar .url {
+  fill: var(--ink-3);
+  font: 12px -apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif;
+}
+.toolbar .dim {
+  fill: var(--chip-2);
+}
+.toolbar .menu {
+  fill: var(--raised);
+  stroke: var(--line);
+  filter: drop-shadow(0 4px 8px rgb(0 0 0 / 0.1));
+}
+.toolbar .menu-title {
+  fill: var(--ink-3);
+  font: 600 11px -apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif;
+}
+.toolbar .menu-item {
+  fill: var(--ink);
+  font: 500 13px -apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif;
+}
+.toolbar .ring {
+  fill: color-mix(in srgb, var(--accent) 16%, transparent);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.toolbar .stroke {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* The puzzle piece, then the pin, take turns to glow. */
+@media (prefers-reduced-motion: no-preference) {
+  .toolbar .hot .ring {
+    animation: glow 2.4s ease-in-out infinite;
+  }
+  .toolbar .hot.then .ring {
+    animation-delay: 1.2s;
+  }
+}
+@keyframes glow {
+  50% {
+    fill: color-mix(in srgb, var(--accent) 34%, transparent);
+  }
+}
+.try {
+  display: inline-block;
+  margin-top: 14px;
+  padding: 9px 18px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 600;
+  text-decoration: none;
+}
+.try:hover {
+  opacity: 0.9;
+}
+.no-shortcut[hidden] {
+  display: none;
+}
+@media (max-width: 520px) {
+  .step {
+    grid-template-columns: 1fr;
+  }
+}

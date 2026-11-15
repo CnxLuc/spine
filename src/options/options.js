@@ -76,28 +76,44 @@ $('share-test').addEventListener('click', async () => {
 // on the reader's own plan; or an Anthropic API key. Unless the reader picks,
 // Spine uses Claude Code, ChatGPT, then Codex, whichever is ready.
 const setup = $('local-setup');
+// kind is null while no one can read yet and the reader hasn't chosen.
 function showEngine(kind) {
   for (const input of document.querySelectorAll('input[name="engine"]')) input.checked = input.value === kind;
   $('api-settings').hidden = kind !== 'api';
   // On a plan, models differ in how much of its limits they use, not in price.
   for (const note of document.querySelectorAll('.model small')) note.textContent = note.dataset[kind === 'api' ? 'api' : 'plan'];
-  $('models-field').hidden = kind === 'codex' || kind === 'chatgpt';
+  $('models-field').hidden = !kind || kind === 'codex' || kind === 'chatgpt';
   $('codex-model').hidden = kind !== 'codex';
   $('auto-hint').textContent =
     kind === 'api' ? 'Turn this off to choose which articles to spend API credits on.' : 'Turn this off to choose which articles are read.';
 }
-function describe(element, tool, name, command, plan) {
+const platform = navigator.userAgentData?.platform ?? navigator.platform ?? '';
+$('terminal-hint').hidden = !/^mac/i.test(platform);
+$('windows-hint').hidden = !/^win/i.test(platform);
+
+// Where Claude Code or Codex stands, in a line.
+function describe(element, tool, name) {
   if (!tool) {
     element.className = 'engine-status';
-    element.textContent = `${name} isn’t installed on this computer.`;
+    element.textContent = name === 'Claude Code' ? 'Claude Code isn’t on this computer yet. The command below installs it.' : 'Codex isn’t installed on this computer.';
   } else if (tool.signedIn) {
     element.className = 'engine-status ok';
-    element.textContent = `Connected: ${tool.version || name}, signed in to your ${plan} plan.`;
+    element.textContent =
+      tool.plan === 'API'
+        ? `Connected: ${tool.version}, signed in with an API key, so reading uses your API credits.`
+        : `Connected: ${tool.version}, signed in to your ${tool.plan} plan.`;
   } else {
     element.className = 'engine-status warn';
-    element.textContent = `${name} is here but not signed in. Run ${command} in Terminal and sign in, then check again.`;
+    element.textContent =
+      name === 'Claude Code'
+        ? 'Claude Code is here but not signed in. Run the command below to sign in.'
+        : 'Codex is here but not signed in. Run codex login in Terminal, then check again.';
   }
 }
+const UNREACHABLE = {
+  timeout: 'Didn’t answer. Check again in a moment.',
+  forbidden: 'Connected for another copy of Spine. Run the command below to connect this one.',
+};
 async function checkLocal(fresh = false) {
   for (const id of ['claude-status', 'codex-status']) {
     $(id).className = 'engine-status';
@@ -105,17 +121,17 @@ async function checkLocal(fresh = false) {
   }
   const state = await chrome.runtime.sendMessage({ type: 'spine:engine', fresh });
   const here = state.local ?? {};
-  if (here.available) {
-    describe($('claude-status'), here.claude, 'Claude Code', 'claude', 'Claude');
-    describe($('codex-status'), here.codex, 'Codex', 'codex', 'ChatGPT');
-    setup.hidden = Boolean(here.claude || here.codex);
+  if (here.available && !here.outdated) {
+    describe($('claude-status'), here.claude, 'Claude Code');
+    describe($('codex-status'), here.codex, 'Codex');
+    setup.hidden = Boolean(here.claude?.signedIn || (here.codex?.signedIn && state.kind === 'codex'));
   } else {
-    const text = here.reason === 'timeout' ? 'Didn’t answer. Check again in a moment.' : 'Not connected yet.';
+    const text = here.outdated ? 'Spine’s connection needs updating. Run the command below.' : UNREACHABLE[here.reason] ?? 'Not connected yet.';
     for (const id of ['claude-status', 'codex-status']) $(id).textContent = text;
     setup.hidden = false;
   }
   showChatGPT(state.chatgpt ?? {});
-  showEngine(state.kind);
+  showEngine(state.choice === 'auto' && !state.ready ? null : state.kind);
   return state;
 }
 
@@ -169,7 +185,7 @@ $('copy-command').addEventListener('click', async () => {
   $('copy-command').textContent = 'Copied';
   setTimeout(() => ($('copy-command').textContent = 'Copy'), 1500);
 });
-showEngine(['api', 'codex', 'chatgpt'].includes(local.engine) ? local.engine : 'claude-code');
+showEngine(['api', 'codex', 'chatgpt', 'claude-code'].includes(local.engine) ? local.engine : null);
 checkLocal();
 
 $('test').addEventListener('click', async () => {

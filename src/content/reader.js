@@ -703,6 +703,13 @@ export class Reader {
         const other = el('button', null, 'Choose another');
         other.addEventListener('click', () => this.onboard.show('choose'));
         status.append(other);
+      } else if (this.ai.code === 'local-setup') {
+        // Claude Code is missing, signed out or not connected: the card shows
+        // the one command that fixes it, and watches for it.
+        const codex = this.cost?.engine === 'codex';
+        const fix = el('button', null, codex ? 'Open settings' : 'Connect Claude');
+        fix.addEventListener('click', () => (codex ? chrome.runtime.sendMessage({ type: 'spine:options' }) : this.onboard.claude()));
+        status.append(fix);
       } else {
         if (this.ai.code === 'limit' && this.cost?.engine === 'chatgpt') {
           const manage = el('button', null, 'Manage usage');

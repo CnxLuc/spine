@@ -62,6 +62,9 @@ function ask(kind, payload, onText, signal) {
       if (message.type === 'delta') {
         text += message.text;
         onText?.(text);
+      } else if (message.type === 'restart') {
+        // Claude Code tried again: the answer starts over.
+        text = '';
       } else if (message.type === 'done') {
         finish();
         try {

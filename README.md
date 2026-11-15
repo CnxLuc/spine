@@ -6,15 +6,16 @@ The reading ideas come from Tareq Ismail’s [Reading Long Form prototype](https
 
 ## Install Spine
 
-Download [spine.zip](https://github.com/CnxLuc/spine/releases/latest/download/spine.zip) from the latest release, then:
+Spine works in Chrome, Arc, Brave, Edge, Dia and Aside. Until its Chrome Web Store listing is live, you install the download:
 
-1. Double-click the file to unzip it.
-2. Type `chrome://extensions` in your browser’s address bar and turn on Developer mode, top right.
-3. Select Load unpacked and choose the unzipped `spine` folder. Keep the folder: your browser loads Spine from it.
+1. Download [spine.zip](https://github.com/CnxLuc/spine/releases/latest/download/spine.zip) and open it to unzip it.
+2. Move the `spine` folder somewhere you’ll keep it, such as Documents. Your browser runs Spine from this folder.
+3. Type `chrome://extensions` in your browser’s address bar and turn on Developer mode, top right.
+4. Select Load unpacked and choose the `spine` folder.
 
-Spine works in Chrome, Arc, Brave, Edge, Dia and Aside. Open it on any article and it asks who reads (see [Choose who reads](#choose-who-reads)). A Chrome Web Store listing is on its way; it will update Spine for you.
+Spine then opens a welcome page that shows you how to pin it and open it. The [website](https://cnxluc.github.io/spine/#install) shows where to select on the extensions page.
 
-Read more at [cnxluc.github.io/spine](https://cnxluc.github.io/spine/).
+To update a downloaded Spine, download it again, replace the folder’s contents, and select the reload arrow on Spine’s card on `chrome://extensions`. Your notes and settings stay.
 
 ## Open Spine on an article
 
@@ -75,30 +76,37 @@ Share links are personal for now. They need a key for Spine’s share server, wh
 
 ## Choose who reads
 
-The first time you open Spine on an article, it asks who should read it, right in the reader: ChatGPT or Claude Code, on a plan you already pay for. Choose one and reading starts as soon as it’s connected. You can also choose in Spine’s settings, or use an Anthropic API key. Without any, Spine still works as a reader view.
+The first time you open Spine on an article, it asks who should read it, right in the reader: ChatGPT or Claude, on a plan you already pay for. Choose one and reading starts as soon as it’s connected. You can also choose in Spine’s settings, or use an Anthropic API key. Without any, Spine still works as a reader view.
 
 ### ChatGPT, on your Plus or Pro plan
 
-Select Continue with ChatGPT. A small window opens where you allow Spine to use your ChatGPT plan, and Spine starts reading as soon as you’re back. There is nothing to install, on any computer. Reading counts toward your plan’s usage limits; see or cap Spine’s share in [your ChatGPT usage settings](https://chatgpt.com/settings/usage).
+Select Continue with ChatGPT. A small window opens where you allow Spine to use your ChatGPT plan, and Spine starts reading as soon as you’re back. There is nothing to install, on any computer. Reading counts toward your plan’s usage limits; see or cap Spine’s share in [your ChatGPT usage settings](https://chatgpt.com/settings/usage). Only ChatGPT Plus and Pro plans can be used in other apps.
 
 Spine uses OpenAI’s [Sign in with ChatGPT for open-source apps](https://developers.openai.com/siwc/token-sharing-open-source). OpenAI sends the sign-in window back to an address on your own computer, 127.0.0.1, which Spine watches for, so nothing has to listen there. Spine keeps the sign-in in its own storage in your browser, which websites and the script Spine adds to them can’t read, and sends it only to OpenAI. To sign out, select Sign out in Spine’s settings, or disconnect Spine in your ChatGPT settings.
 
-### Claude Code or Codex, on your own plan
+### Claude, on your Pro or Max plan
 
-If you use [Claude Code](https://claude.com/claude-code) or [Codex](https://developers.openai.com/codex), Spine can read with it, on your Claude or ChatGPT plan, with nothing extra to pay. Reading counts toward your plan’s usage limits, like any other use. Select Use Claude Code and Spine shows you the command below, then starts reading as soon as it’s connected.
+Spine reads on your Claude plan through [Claude Code](https://claude.com/claude-code), Anthropic’s app, which comes with Pro and Max. Select Use your Claude plan, and Spine shows you one command to paste into Terminal, once, on a Mac or Linux:
 
-1. Make sure Claude Code or Codex is installed and signed in: run `claude` or `codex` once in Terminal.
-2. Connect Spine to it with one command, on macOS or Linux:
+```sh
+curl -fsSL https://cnxluc.github.io/spine/connect.sh | bash
+```
 
-   ```sh
-   curl -fsSL https://cnxluc.github.io/spine/connect.sh | bash
-   ```
+The command does 3 things. It asks before it installs Claude Code.
 
-3. Open Spine’s settings. They show which tools are connected and signed in.
+1. If Claude Code isn’t on your computer, it installs it with [Anthropic’s own installer](https://claude.ai/install.sh).
+2. If Claude Code isn’t signed in, it opens Anthropic’s sign-in in your browser.
+3. It adds Spine’s connector, a short script (`native/spine-host.sh`) that your browser starts when Spine asks for a reading, and that only Spine may start.
 
-The command installs a small program, `native/spine_host.py`, and registers it with every Chromium browser on your computer. Your browser starts it when Spine asks for a reading, and only Spine may start it. It runs your own, unmodified `claude -p` or `codex exec`, signed in as you, then exits. Spine never sees or stores your Claude or ChatGPT sign-in, and nothing runs in the background. To remove it, run the same command with `bash -s -- --uninstall`.
+Spine starts reading as soon as the command finishes. Reading counts toward your plan’s usage limits, like any other use of Claude Code.
 
-When several are ready, Spine uses Claude Code, then ChatGPT, then Codex, unless you choose in settings.
+The connector runs your own, unmodified `claude -p`, signed in as you, passes the article straight to it and passes back what it prints. It needs nothing else installed: no Python and no Node. Spine never sees your Claude sign-in, and nothing runs in the background. To remove the connector, run the same command with `bash -s -- --uninstall`.
+
+On Windows, Spine cannot read on your Claude plan yet. Use ChatGPT or an Anthropic API key.
+
+### Codex, on your ChatGPT plan
+
+If you use [Codex](https://developers.openai.com/codex), the same command connects it too. Spine runs `codex exec` in a read-only sandbox, ignoring your own Codex settings, so it uses your plan’s default model. When several readers are ready, Spine uses Claude Code, then ChatGPT, then Codex, unless you choose in settings.
 
 ### An Anthropic API key
 
@@ -138,11 +146,13 @@ Load `dist/` with Load unpacked on your browser’s extensions page, with develo
 Tests:
 
 ```sh
-node --test test/*.test.mjs            # unit tests: sentences, notes, folds
+node --test test/*.test.mjs            # unit tests: sentences, notes, folds, the connector and its installer
 node build.mjs --test                  # a build the browser tests can drive
 node test/look.mjs <url> [name]        # screenshots of Spine on a page
 node test/ai.mjs <url> [name] [--engine=claude-code|codex]   # reads a page with your Claude Code or Codex
 node --test test/native.test.mjs       # the connector, against fake claude and codex
+node --test test/connect.test.mjs      # the connect command, in a stand-in home folder
+node test/welcome-check.mjs            # the page Spine opens when it's installed
 node test/local-check.mjs              # Spine finding Claude Code and Codex
 node test/onboard.mjs                  # the first-run card and ChatGPT sign-in, against a stand-in for OpenAI
 node test/tour.mjs <url> [name]        # each lens, panel and theme, as screenshots
@@ -167,8 +177,10 @@ Never load `.test-build/` in your own browser: it can open Spine on any page wit
 | `src/content/styles.css` | Every colour, font and timing |
 | `src/chatgpt.js` | Sign in with ChatGPT, and reading on a ChatGPT plan |
 | `src/content/onboard.js` | The card that asks who reads, the first time |
-| `native/spine_host.py` | The connector your browser starts to run Claude Code or Codex |
-| `tools/connect.sh` | The installer for the connector; the build puts it on the website |
+| `native/spine-host.sh` | The connector your browser starts to run Claude Code or Codex, in plain bash |
+| `src/local.js` | What Spine asks the connector, and how it reads what Claude Code and Codex print |
+| `tools/connect.sh` | The command that installs Claude Code if needed, signs in and adds the connector; the build puts it on the website |
+| `src/welcome/` and `static/welcome.html` | The page Spine opens once, when it’s installed |
 | `docs/` | The website, with the privacy policy, served by GitHub Pages |
 | `store/` | The Chrome Web Store listing text, images and the scripts that make them |
 

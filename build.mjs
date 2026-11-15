@@ -10,11 +10,11 @@
 //                             spine-<version>.zip to download, and
 //                             spine-store-<version>.zip for the Chrome Web Store
 import * as esbuild from 'esbuild';
-import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { extensionIds, installer } from './tools/installer.mjs';
 
 const watch = process.argv.includes('--watch');
 const test = process.argv.includes('--test');
@@ -49,7 +49,7 @@ const options = {
 const content = { ...options, entryPoints: { content: 'src/content/main.js' }, format: 'iife' };
 const rest = {
   ...options,
-  entryPoints: { background: 'src/background.js', options: 'src/options/options.js' },
+  entryPoints: { background: 'src/background.js', options: 'src/options/options.js', welcome: 'src/welcome/welcome.js' },
 };
 
 if (watch) {
@@ -58,23 +58,9 @@ if (watch) {
   await Promise.all([esbuild.build(content), esbuild.build(rest)]);
 }
 
-// The connector installer the website serves, with the native host inside
-// it and the ids of every Spine allowed to use it: the one the manifest's key
-// gives, and the Chrome Web Store one once it exists (store/STORE_ID).
-const idOf = key =>
-  [...createHash('sha256').update(Buffer.from(key, 'base64')).digest('hex').slice(0, 32)]
-    .map(digit => String.fromCharCode(97 + parseInt(digit, 16)))
-    .join('');
-if (!test) {
-  const ids = [idOf(manifest.key)];
-  const storeId = await readFile('store/STORE_ID', 'utf8').then(text => text.trim(), () => '');
-  if (/^[a-p]{32}$/.test(storeId)) ids.push(storeId);
-  const host = await readFile('native/spine_host.py', 'utf8');
-  const installer = (await readFile('tools/connect.sh', 'utf8'))
-    .replace('__SPINE_HOST_PY__', () => host.trimEnd())
-    .replace('__SPINE_EXTENSION_IDS__', () => ids.join(' '));
-  await writeFile('docs/connect.sh', installer, { mode: 0o755 });
-}
+// The connector installer the website serves, with the connector inside it
+// and the ids of every Spine allowed to use it.
+if (!test) await writeFile('docs/connect.sh', await installer(await extensionIds()), { mode: 0o755 });
 
 // Two zips: spine.zip to download and load unpacked, which keeps the
 // manifest's key so every copy has the id the Claude Code and Codex connector

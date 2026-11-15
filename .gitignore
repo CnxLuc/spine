@@ -13,3 +13,4 @@ share/node_modules/
 share/.vercel/
 share/public/reader/
 share/lib/build.js
+node_modules

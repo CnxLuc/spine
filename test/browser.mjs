@@ -14,10 +14,12 @@ export async function connectLocal(profile, { claude = null, codex = null } = {}
   const folder = join(profile, 'NativeMessagingHosts');
   await mkdir(folder, { recursive: true });
   const wrapper = join(profile, 'spine-host');
-  const lines = ['#!/bin/sh'];
-  // An unset tool points at nothing, so the host doesn't find the real one.
+  const lines = ['#!/bin/bash'];
+  // An unset tool points at nothing, and the connector looks nowhere else, so
+  // it doesn't find the real one.
   lines.push(`export CLAUDE_BIN="${claude ?? '/nonexistent'}"`, `export CODEX_BIN="${codex ?? '/nonexistent'}"`);
-  lines.push(`exec /usr/bin/python3 "${resolve('native/spine_host.py')}"`);
+  lines.push('export SPINE_SEARCH="" PATH=/usr/bin:/bin');
+  lines.push(`exec /bin/bash "${resolve('native/spine-host.sh')}"`);
   await writeFile(wrapper, `${lines.join('\n')}\n`, { mode: 0o755 });
   await writeFile(
     join(folder, 'com.spine.local.json'),

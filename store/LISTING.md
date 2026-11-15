@@ -1,8 +1,10 @@
 # Chrome Web Store listing
 
-Everything to paste into the [Chrome Web Store developer dashboard](https://chrome.google.com/webstore/devconsole), field by field. Upload `releases/spine-store-1.2.0.zip`, the zip without the development key.
+Everything to paste into the [Chrome Web Store developer dashboard](https://chrome.google.com/webstore/devconsole), field by field. Upload `releases/spine-store-1.3.0.zip`, the zip without the development key.
 
-After the first upload, the dashboard shows Spine’s item ID. Put it in `store/STORE_ID` and run `node build.mjs`, then publish `docs/`: the Claude Code and Codex connector then allows the store’s Spine too.
+After the first upload, the dashboard shows Spine’s item ID. Put it in `store/STORE_ID` and run `node build.mjs`, then publish `docs/`: the Claude Code and Codex connector then allows the store’s Spine too. People who connected Claude Code before that run the command again; Spine shows it to them.
+
+Then point the website’s Download buttons and the README’s install steps at the store listing.
 
 ## Store listing tab
 
@@ -32,13 +34,14 @@ Open any article and press Alt+Shift+S (⌥⇧S on a Mac), or select Spine's too
 WHO READS, AND WHAT IT COSTS
 Spine is free. The first time you open it on an article, it asks who reads:
 • ChatGPT, on your Plus or Pro plan, with nothing extra to pay: sign in once, right in the reader.
-• Claude Code or Codex on your computer, on your Claude or ChatGPT plan: Spine shows you one command to connect them, and never sees your sign-in.
+• Claude, on your Pro or Max plan, with nothing extra to pay, through Claude Code on your Mac or Linux computer. Spine shows you one command that installs Claude Code if you need it, signs you in with Anthropic and connects it. Spine never sees your sign-in.
+• Codex on your computer, on your ChatGPT plan, if you use it.
 • An Anthropic API key, billed to your API credits. With Claude Opus 5.5, a short post costs about 6¢ and a long essay about 62¢, once per article. Spine shows the cost before it reads and asks first above $1.
 
-Without either, Spine is still a calm reader view.
+Without any of them, Spine is still a calm reader view.
 
 PRIVACY
-Spine has no servers and collects nothing for its developer. When you agree, it sends the text of the articles you open to the reader you chose: ChatGPT, your Claude Code or Codex, or Anthropic with your key. Your sign-in, key, notes and settings stay in your browser.
+Spine collects nothing for its developer and has no analytics or tracking. When you agree, it sends the text of the articles you open to the reader you chose: ChatGPT, your Claude Code or Codex, or Anthropic with your key. Your sign-in, key, notes and settings stay in your browser. Share links, which need a share key, are the only thing Spine sends to a server of its own.
 
 CREDITS
 Spine's reading ideas come from Tareq Ismail's Reading Long Form, episode 2 of Interfaces that think. Spine is open source under the MIT licence.
@@ -95,7 +98,7 @@ Remote code: No, I am not using remote code. All JavaScript is in the package.
 
 Data usage, what the extension collects:
 
-- Website content: yes. The text of the article the user chooses to read, sent to the reader they chose to make the notes, after they agree in the extension: their own Claude Code or Codex on their computer (which send it to Anthropic or OpenAI under the user’s own plan), or Anthropic’s API.
+- Website content: yes. The text of the article the user chooses to read, sent to the reader they chose to make the notes, after they agree in the extension: OpenAI’s API under their ChatGPT plan, their own Claude Code or Codex on their computer (which send it to Anthropic or OpenAI under the user’s own plan), or Anthropic’s API with their key. When a user with a share key makes a share link, the article and its notes go to Spine’s share server, which publishes them at that link until the user stops sharing.
 - Authentication information: yes. The user’s own Anthropic API key, sent only to Anthropic, and the tokens OpenAI issues when they sign in with ChatGPT, sent only to OpenAI. Both are stored in the browser, to authorise the user’s own requests.
 - Personally identifiable information: yes. The name and email address of the ChatGPT account the user signs in with, kept in the browser to show which account is signed in. Spine sends them nowhere.
 - Everything else (health, financial, personal communications, location, web history, user activity): no.

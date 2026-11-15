@@ -78,7 +78,8 @@ async function continueWithChatGPT({ context, page }) {
   await check('a first article offers ChatGPT and Claude Code, right in the reader', async () => {
     const shown = await cardIn(page, 'choose');
     assert.match(shown.text, /Continue with ChatGPT/);
-    assert.match(shown.text, /Use Claude Code/);
+    assert.match(shown.text, /Use your Claude plan/);
+    assert.match(shown.text, /Pro or Max, through Claude Code/);
     assert.match(shown.text, /sends them the text of the articles you open, and nothing else/);
     await picture(page, 'onboard-choose');
   });
@@ -252,11 +253,12 @@ async function continueWithChatGPT({ context, page }) {
   const { page } = browser;
   await cardIn(page, 'choose');
 
-  await check('Use Claude Code shows the one command, and reads as soon as it’s connected', async () => {
+  await check('Use your Claude plan shows the one command, and reads as soon as it’s connected', async () => {
     await page.locator('.who-card .ob-alt').click();
     const waiting = await cardIn(page, 'claudeWaiting', /Paste this into Terminal/);
     assert.match(waiting.text, /curl -fsSL https:\/\/cnxluc\.github\.io\/spine\/connect\.sh \| bash/);
-    assert.match(waiting.text, /Waiting for Claude Code/);
+    assert.match(waiting.text, /installs Claude Code if you need it, asks you to sign in and connects Spine/);
+    assert.match(waiting.text, /Spine starts reading as soon as it’s ready/);
     await picture(page, 'onboard-claude');
     await connectLocal(browser.profile, { claude: FAKE_CLAUDE });
     await settled(page);

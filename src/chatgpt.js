@@ -433,8 +433,12 @@ async function* events(body) {
 function explain(status, data) {
   const error = data?.error ?? {};
   const code = String(error.code ?? error.type ?? data?.detail ?? '');
-  if (/usage_limit_exceeded|usage_unavailable/.test(code) || status === 429) {
+  if (/usage_limit_exceeded/.test(code) || status === 429) {
     return { code: 'limit', message: 'Usage limit reached. Review your plan or Spine’s limit in ChatGPT settings.' };
+  }
+  // OpenAI's side, for a while: worth trying again, not signing in again.
+  if (/usage_unavailable|user_unavailable/.test(code)) {
+    return { code: 'network', message: 'Your ChatGPT plan isn’t available to Spine right now. Try again in a few minutes.' };
   }
   if (/user_not_eligible/.test(code)) {
     return { code: 'chatgpt-plan', message: 'Your ChatGPT plan can’t be used in other apps. ChatGPT Plus and Pro can.' };
