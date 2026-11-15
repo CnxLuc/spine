@@ -106,8 +106,10 @@
           <h3>3. Choose who reads</h3>
           <p>The first time, Spine asks right in the reader.</p>
           <p>ChatGPT, on your Plus or Pro plan: you sign in once, and there’s nothing to install.</p>
-          <p>Claude, on your Pro or Max plan: you paste one command into Terminal, once, on a Mac or Linux. It installs Claude Code, Anthropic’s app for your plan, if you need it, asks you to sign in and connects Spine.</p>
+          <p>Claude, on your Pro or Max plan: you paste one command, once. It installs Claude Code, Anthropic’s app for your plan, if you need it, asks you to sign in and connects Spine. On a Mac or Linux, in Terminal:</p>
           <code class="command">curl -fsSL https://cnxluc.github.io/spine/connect.sh | bash</code>
+          <p class="after">On Windows, in PowerShell:</p>
+          <code class="command">irm https://raw.githubusercontent.com/CnxLuc/spine/main/docs/connect.ps1 | iex</code>
         </div>
       </div>
     </section>

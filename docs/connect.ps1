@@ -609,7 +609,7 @@ static class SpineHost
     & $codex login status *> $null
     if ($LASTEXITCODE -eq 0) { $ready += "Codex $(((& $codex --version 2>$null) | Select-Object -First 1) -replace '^.* ', '')" }
   }
-  $browsers = $connected -join ', '
+  $browsers = if ($connected.Count -gt 1) { ($connected[0..($connected.Count - 2)] -join ', ') + ' and ' + $connected[-1] } else { $connected[0] }
   if ($ready) {
     Write-Host "Spine is connected to $($ready -join ' and ') in $browsers."
     Write-Host ''

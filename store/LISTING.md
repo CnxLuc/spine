@@ -34,7 +34,7 @@ Open any article and press Alt+Shift+S (⌥⇧S on a Mac), or select Spine's too
 WHO READS, AND WHAT IT COSTS
 Spine is free. The first time you open it on an article, it asks who reads:
 • ChatGPT, on your Plus or Pro plan, with nothing extra to pay: sign in once, right in the reader.
-• Claude, on your Pro or Max plan, with nothing extra to pay, through Claude Code on your Mac or Linux computer. Spine shows you one command that installs Claude Code if you need it, signs you in with Anthropic and connects it. Spine never sees your sign-in.
+• Claude, on your Pro or Max plan, with nothing extra to pay, through Claude Code on your computer. Spine shows you one command, for Terminal or PowerShell, that installs Claude Code if you need it, signs you in with Anthropic and connects it. Spine never sees your sign-in.
 • Codex on your computer, on your ChatGPT plan, if you use it.
 • An Anthropic API key, billed to your API credits. With Claude Opus 5.5, a short post costs about 6¢ and a long essay about 62¢, once per article. Spine shows the cost before it reads and asks first above $1.
 

@@ -526,3 +526,6 @@ kbd {
     grid-row: auto;
   }
 }
+.card p.after {
+  margin-top: 12px;
+}

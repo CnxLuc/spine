@@ -86,10 +86,16 @@ Spine uses OpenAI’s [Sign in with ChatGPT for open-source apps](https://develo
 
 ### Claude, on your Pro or Max plan
 
-Spine reads on your Claude plan through [Claude Code](https://claude.com/claude-code), Anthropic’s app, which comes with Pro and Max. Select Use your Claude plan, and Spine shows you one command to paste into Terminal, once, on a Mac or Linux:
+Spine reads on your Claude plan through [Claude Code](https://claude.com/claude-code), Anthropic’s app, which comes with Pro and Max. Select Use your Claude plan, and Spine shows you one command to paste, once. On a Mac or Linux, paste it into Terminal:
 
 ```sh
 curl -fsSL https://cnxluc.github.io/spine/connect.sh | bash
+```
+
+On Windows, paste this into PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/CnxLuc/spine/main/docs/connect.ps1 | iex
 ```
 
 The command does 3 things. It asks before it installs Claude Code.
@@ -100,9 +106,9 @@ The command does 3 things. It asks before it installs Claude Code.
 
 Spine starts reading as soon as the command finishes. Reading counts toward your plan’s usage limits, like any other use of Claude Code.
 
-The connector runs your own, unmodified `claude -p`, signed in as you, passes the article straight to it and passes back what it prints. It needs nothing else installed: no Python and no Node. Spine never sees your Claude sign-in, and nothing runs in the background. To remove the connector, run the same command with `bash -s -- --uninstall`.
+The connector runs your own, unmodified `claude -p`, signed in as you, passes the article straight to it and passes back what it prints. It needs nothing else installed: no Python and no Node. On Windows, the command builds the connector on your computer from its source, `native/SpineHost.cs`, with the C# compiler that comes with Windows. Spine never sees your Claude sign-in, and nothing runs in the background.
 
-On Windows, Spine cannot read on your Claude plan yet. Use ChatGPT or an Anthropic API key.
+To remove the connector, run the same command with `bash -s -- --uninstall` on a Mac or Linux. On Windows, run `$env:SPINE_UNINSTALL = 1` in PowerShell first, then the same command.
 
 ### Codex, on your ChatGPT plan
 
@@ -152,6 +158,7 @@ node test/look.mjs <url> [name]        # screenshots of Spine on a page
 node test/ai.mjs <url> [name] [--engine=claude-code|codex]   # reads a page with your Claude Code or Codex
 node --test test/native.test.mjs       # the connector, against fake claude and codex
 node --test test/connect.test.mjs      # the connect command, in a stand-in home folder
+node --test test/windows.test.mjs      # the Windows connector and its command (on Windows only; CI runs it)
 node test/welcome-check.mjs            # the page Spine opens when it's installed
 node test/local-check.mjs              # Spine finding Claude Code and Codex
 node test/onboard.mjs                  # the first-run card and ChatGPT sign-in, against a stand-in for OpenAI
@@ -178,8 +185,9 @@ Never load `.test-build/` in your own browser: it can open Spine on any page wit
 | `src/chatgpt.js` | Sign in with ChatGPT, and reading on a ChatGPT plan |
 | `src/content/onboard.js` | The card that asks who reads, the first time |
 | `native/spine-host.sh` | The connector your browser starts to run Claude Code or Codex, in plain bash |
+| `native/SpineHost.cs` | The same connector for Windows, which Windows’ own compiler builds on the reader’s computer |
 | `src/local.js` | What Spine asks the connector, and how it reads what Claude Code and Codex print |
-| `tools/connect.sh` | The command that installs Claude Code if needed, signs in and adds the connector; the build puts it on the website |
+| `tools/connect.sh` and `tools/connect.ps1` | The commands that install Claude Code if needed, sign in and add the connector, on a Mac or Linux and on Windows; the build puts them in `docs/` |
 | `src/welcome/` and `static/welcome.html` | The page Spine opens once, when it’s installed |
 | `docs/` | The website, with the privacy policy, served by GitHub Pages |
 | `store/` | The Chrome Web Store listing text, images and the scripts that make them |

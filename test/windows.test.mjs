@@ -128,7 +128,8 @@ test('on Windows, the connect command installs Claude Code, signs in and registe
   const said = run.stdout + run.stderr;
   assert.equal(run.status, 0, said);
   assert.match(said, /Installing Claude Code, with Anthropic's installer/);
-  assert.match(said, /Spine is connected to Claude Code 9\.9\.9 in Chrome\./, said);
+  // The test machine has Edge as well as Chrome.
+  assert.match(said, /Spine is connected to Claude Code 9\.9\.9 in Chrome( and Edge)?\./, said);
   const key = spawnSync('reg', ['query', 'HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.spine.local', '/ve'], { encoding: 'utf8' }).stdout;
   const manifestPath = join(local, 'Spine', 'com.spine.local.json');
   assert.ok(key.includes(manifestPath), key);
