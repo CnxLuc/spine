@@ -66,8 +66,8 @@ static class FakeClaude
         Stream stdout = Console.OpenStandardOutput();
         Action<string> emit = delegate (string line)
         {
-            byte[] bytes = new UTF8Encoding(false).GetBytes(line + "\n");
-            stdout.Write(bytes, 0, bytes.Length);
+            byte[] encoded = new UTF8Encoding(false).GetBytes(line + "\n");
+            stdout.Write(encoded, 0, encoded.Length);
             stdout.Flush();
         };
         if (codex)
