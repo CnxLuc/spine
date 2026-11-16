@@ -1,6 +1,8 @@
 # Spine’s share server
 
-The share server keeps shared articles and shows each one at a short address, in Spine’s reader. It is one Vercel function, with shares in a private Vercel Blob store. Spine’s own runs at read-with-spine.vercel.app.
+The share server keeps shared articles and shows each one at a short address, in Spine’s reader. It is two Vercel functions, with shares in a private Vercel Blob store. Spine’s own runs at read-with-spine.vercel.app.
+
+It also serves Spine for iPhone, the web app at `/app`, from [src/app](../src/app) and [share/app](app). The app fetches articles through `/api/fetch`, because a web page can’t fetch other sites itself.
 
 ## How a share works
 
@@ -14,7 +16,7 @@ Pages stay in Vercel’s cache for a minute at most. A changed or deleted share 
 
 ## Requests
 
-Every request to `/api/share` needs the key, as `Authorization: Bearer <key>`. Pages need nothing.
+Every request to `/api/share` and `/api/fetch` needs the key, as `Authorization: Bearer <key>`. Pages need nothing.
 
 | Request | What it does |
 | --- | --- |
@@ -24,13 +26,15 @@ Every request to `/api/share` needs the key, as `Authorization: Bearer <key>`. P
 | `GET /api/share` | Checks a key |
 | `GET /api/share?id=…` | Checks that a link still works |
 | `GET /<id>` | Shows the shared article |
+| `GET /api/fetch?url=…` | Fetches a web page for Spine for iPhone, after redirects, and says where it ended up. It refuses addresses inside a private network and pages over 6 MB |
+| `GET /app/` | Spine for iPhone |
 
 ## Run your own
 
 From the repository’s root:
 
 1. Run `npm install --prefix share`.
-2. Run `node share/build.mjs` to build the shared page into `share/public/reader`.
+2. Run `node share/build.mjs` to build the shared page into `share/public/reader` and Spine for iPhone into `share/public/app`.
 3. In `share`, run `vercel link`, then `vercel blob create-store <name> --access private` to make a private store for the shares.
 4. Run `vercel env add SHARE_KEY production` and give it a key of at least 16 characters. To fix the address links use, set `SHARE_ORIGIN` the same way.
 5. Run `vercel deploy --prod` in `share`.
@@ -41,3 +45,5 @@ Build the page again before each deploy, so pages load the reader you deploy.
 ## Test
 
 Run `node build.mjs --test && node share/build.mjs --test && node test/share-check.mjs`. The check runs the server on your computer and shares 4 real articles whose notes are saved in `test/.profile`, as the other reader checks do. It opens each link in a browser without Spine and checks that every lens shows exactly what the extension shows. It also checks phones, link previews, sharing again, deleting, the key, and a share that carries scripts.
+
+`node test/app-check.mjs` checks Spine for iPhone the same way, with a stand-in for OpenAI. Spine’s settings sign in for the iPhone. The app takes the sign-in, adds an article by its link and reads it, in Chromium and in WebKit at iPhone size.

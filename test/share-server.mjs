@@ -1,13 +1,22 @@
-// The share server on this computer, for the tests: the same handler as on
-// Vercel (share/lib/handler.js), with shares kept in memory and the shared page
-// from share/public. Build it first with `node share/build.mjs --test`.
+// The share server on this computer, for the tests: the same handlers as on
+// Vercel (share/lib/handler.js and share/lib/fetch.js), with shares kept in
+// memory, and the shared page and Spine for iPhone from share/public. Build
+// them first with `node share/build.mjs --test`.
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
 import { handle } from '../share/lib/handler.js';
+import { fetchPage } from '../share/lib/fetch.js';
 
 const PUBLIC = resolve('share/public');
-const TYPES = { '.js': 'text/javascript', '.png': 'image/png', '.ttf': 'font/ttf', '.txt': 'text/plain' };
+const TYPES = {
+  '.js': 'text/javascript',
+  '.png': 'image/png',
+  '.ttf': 'font/ttf',
+  '.txt': 'text/plain',
+  '.html': 'text/html; charset=utf-8',
+  '.webmanifest': 'application/manifest+json',
+};
 
 export async function startShareServer({ key = 'a-test-key-long-enough' } = {}) {
   const shares = new Map();
@@ -24,8 +33,13 @@ export async function startShareServer({ key = 'a-test-key-long-enough' } = {}) 
   const server = createServer(async (incoming, outgoing) => {
     const url = new URL(incoming.url, `http://${incoming.headers.host}`);
     try {
-      if (url.pathname.startsWith('/reader/')) {
-        const file = normalize(join(PUBLIC, url.pathname));
+      if (url.pathname === '/app') {
+        outgoing.writeHead(308, { location: '/app/' });
+        outgoing.end();
+        return;
+      }
+      if (url.pathname.startsWith('/reader/') || url.pathname.startsWith('/app/')) {
+        const file = normalize(join(PUBLIC, url.pathname.endsWith('/') ? `${url.pathname}index.html` : url.pathname));
         if (!file.startsWith(PUBLIC)) throw Object.assign(new Error('outside'), { code: 'ENOENT' });
         const body = await readFile(file);
         outgoing.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' });
@@ -42,7 +56,8 @@ export async function startShareServer({ key = 'a-test-key-long-enough' } = {}) 
         headers,
         body: ['GET', 'HEAD'].includes(incoming.method) ? undefined : Buffer.concat(chunks),
       });
-      const response = await handle(request, { store, key });
+      // Pages on this computer are allowed, for the tests' own articles.
+      const response = url.pathname === '/api/fetch' ? await fetchPage(request, { key, local: true }) : await handle(request, { store, key });
       outgoing.writeHead(response.status, Object.fromEntries(response.headers));
       outgoing.end(Buffer.from(await response.arrayBuffer()));
     } catch (error) {

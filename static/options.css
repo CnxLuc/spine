@@ -553,3 +553,18 @@ select {
   padding: 5px 8px;
   font-size: 13px;
 }
+
+/* Spine on your iPhone: sign in for the phone, then copy the sign-in. */
+.phone-steps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 8px;
+}
+.phone-steps .primary[hidden] {
+  display: none;
+}
+#iphone[hidden] {
+  display: none;
+}

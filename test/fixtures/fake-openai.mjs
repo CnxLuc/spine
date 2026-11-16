@@ -45,7 +45,7 @@ function replyFor(name, input) {
 }
 
 export async function startFakeOpenAI() {
-  const state = { seen: { authorize: [], token: [], revoke: [], models: 0, responses: [] }, limit: false, codes: new Map() };
+  const state = { seen: { authorize: [], token: [], revoke: [], models: 0, responses: [], bearers: [] }, limit: false, codes: new Map() };
   const body = request =>
     new Promise(resolve => {
       let data = '';
@@ -60,6 +60,17 @@ export async function startFakeOpenAI() {
       response.end(type === 'application/json' ? JSON.stringify(value) : value);
     };
     const issuer = state.issuer;
+    // Like OpenAI's own addresses, which answer web pages too: Spine for iPhone
+    // calls them from the phone.
+    if (request.method === 'OPTIONS') {
+      response.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'authorization, content-type, accept',
+        'Access-Control-Max-Age': '600',
+      });
+      return response.end();
+    }
 
     if (url.pathname === '/article') return send(200, ARTICLE, 'text/html; charset=utf-8');
 
@@ -136,6 +147,7 @@ export async function startFakeOpenAI() {
     if (url.pathname === '/v1/responses' && request.method === 'POST') {
       const payload = JSON.parse(await body(request));
       state.seen.responses.push(payload);
+      state.seen.bearers.push(request.headers.authorization ?? '');
       if (!bearer) return send(401, { error: { code: 'invalid_api_key' } });
       if (state.ineligible) {
         return send(403, { error: { code: 'subscription_sharing_user_not_eligible', message: 'Not eligible.' } });
