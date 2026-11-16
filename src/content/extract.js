@@ -243,13 +243,12 @@ function readPart(doc, element) {
   return { content: raw, title: doc.title };
 }
 
-// Everything the header shows, read from the live page.
-function readMeta(doc, parsed) {
+// Everything the header shows, read from the page at page (a URL).
+function readMeta(doc, parsed, page, base) {
   const meta = name =>
     doc.querySelector(`meta[property="${name}"], meta[name="${name}"]`)?.getAttribute('content')?.trim() || '';
-  const base = doc.baseURI;
   const canonical = absolute(doc.querySelector('link[rel="canonical"]')?.getAttribute('href'), base);
-  const url = canonical && /^https?:/.test(canonical) ? canonical : location.href;
+  const url = canonical && /^https?:/.test(canonical) ? canonical : page.href;
   const icons = [...doc.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"]')]
     .map(link => ({
       href: absolute(link.getAttribute('href'), base),
@@ -267,7 +266,7 @@ function readMeta(doc, parsed) {
   let byline = squash(parsed?.byline || meta('author') || '');
   byline = byline.replace(/^by\s+/i, '');
   if (byline.length > 80 || /^https?:/.test(byline) || /\[bot\]|^@?[\w-]+bot$/i.test(byline)) byline = '';
-  const host = location.hostname.replace(/^www\./, '');
+  const host = page.hostname.replace(/^www\./, '');
   // A publisher's legal name ("Wikimedia Foundation, Inc.") isn't what readers call the site.
   let siteName = squash(parsed?.siteName || meta('og:site_name') || '');
   if (/\b(inc|llc|ltd|gmbh|corp|corporation|foundation|limited)\b\.?/i.test(siteName)) {
@@ -285,7 +284,7 @@ function readMeta(doc, parsed) {
     published: formatDate(published, lang),
     lang,
     dir: parsed?.dir || doc.documentElement.dir || doc.body?.dir || 'ltr',
-    favicon: icons[0]?.href || `${location.origin}/favicon.ico`,
+    favicon: icons[0]?.href || `${page.origin}/favicon.ico`,
     image: absolute(meta('og:image'), base),
   };
 }
@@ -880,7 +879,11 @@ function hasContent(element) {
 }
 
 // The article on this page, as { meta, blocks }, or null when there isn't one.
-export function extractArticle(doc = document, { force = false } = {}) {
+// url is the page's address when doc came from somewhere else, such as a page
+// Spine's iPhone app fetched.
+export function extractArticle(doc = document, { force = false, url = null } = {}) {
+  const page = new URL(url ?? location.href);
+  const base = url && !doc.querySelector('base[href]') ? page.href : doc.baseURI;
   const clone = doc.cloneNode(true);
   inlineDivs(doc, clone);
   clone.getElementById(HOST_ID)?.remove();
@@ -896,7 +899,7 @@ export function extractArticle(doc = document, { force = false } = {}) {
   }
   // A site whose article Spine knows where to find, or a page where
   // Readability found little: read the article's own container instead.
-  const rule = SITE_RULES.find(entry => entry.hosts.test(location.hostname));
+  const rule = SITE_RULES.find(entry => entry.hosts.test(page.hostname));
   const ruled = rule && doc.querySelector(rule.selector);
   if (ruled && wordCount(ruled.textContent) >= 150) {
     const part = rule.asIs ? { content: copyOf(ruled, document) } : readPart(doc, ruled);
@@ -926,9 +929,9 @@ export function extractArticle(doc = document, { force = false } = {}) {
   }
   if (!root) return null;
 
-  const meta = readMeta(doc, parsed);
+  const meta = readMeta(doc, parsed, page, base);
   cleanTitle(meta, doc);
-  const rebuilder = new Rebuilder(doc.baseURI, location.href);
+  const rebuilder = new Rebuilder(base, page.href);
   let blocks = rebuilder.blocks(root);
   blocks = tidy(blocks, meta);
   blocks = lift(blocks, meta);

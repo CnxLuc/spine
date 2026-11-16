@@ -5,9 +5,52 @@ import { DEFAULT_MODEL, MODELS } from '../shared/prompts.js';
 import { money } from '../shared/pricing.js';
 import { CHATGPT_LOGO } from '../shared/brands.js';
 import { WINDOWS_COMMAND } from '../shared/commands.js';
+import { encodeHandoff } from '../shared/handoff.js';
 import { SHARE_SERVER } from '../shares.js';
 
 const $ = id => document.getElementById(id);
+
+// Spine for iPhone: a ChatGPT sign-in made here for the phone, copied as one
+// line to paste there. The phone's tokens stay in this page until copied.
+let phoneSession = null;
+const phoneStatus = (text, tone = '') => {
+  $('phone-status').className = `result ${tone}`.trim();
+  $('phone-status').textContent = text;
+};
+const phoneKey = async () => (await chrome.storage.local.get('shareKey')).shareKey?.trim() ?? '';
+$('phone-sign-in').insertAdjacentHTML('afterbegin', CHATGPT_LOGO);
+$('phone-sign-in').addEventListener('click', async () => {
+  if (!(await phoneKey())) {
+    phoneStatus('Add your share key under Advanced first. Spine for iPhone uses it to fetch articles.', 'fail');
+    return;
+  }
+  phoneSession = null;
+  $('phone-copy').hidden = true;
+  phoneStatus('Finish signing in in the window that opened.');
+  const reply = await chrome.runtime.sendMessage({ type: 'spine:phone-sign-in' });
+  if (!reply?.started) phoneStatus(reply?.message ?? 'Spine couldn’t open the ChatGPT sign-in.', 'fail');
+});
+chrome.runtime.onMessage.addListener(message => {
+  if (message?.type !== 'spine:phone-connected') return;
+  if (!message.ok) {
+    phoneStatus(message.message, 'fail');
+    return;
+  }
+  phoneSession = message.session;
+  phoneStatus(`Signed in for your iPhone${phoneSession.email ? ` as ${phoneSession.email}` : ''}. Now copy it.`, 'ok');
+  $('phone-copy').hidden = false;
+});
+$('phone-copy').addEventListener('click', async () => {
+  if (!phoneSession) return;
+  const { shareServer = '' } = await chrome.storage.local.get('shareServer');
+  const text = encodeHandoff({ server: shareServer.trim() || SHARE_SERVER, key: await phoneKey(), chatgpt: phoneSession });
+  try {
+    await navigator.clipboard.writeText(text);
+    phoneStatus('Copied. On your iPhone, open Spine and select Paste from your Mac.', 'ok');
+  } catch {
+    phoneStatus('Spine couldn’t copy it. Select Copy for your iPhone again.', 'fail');
+  }
+});
 
 const local = await chrome.storage.local.get(['apiKey', 'model', 'baseURL', 'engine', 'shareKey', 'shareServer']);
 const synced = { ...DEFAULTS, ...(await chrome.storage.sync.get(Object.keys(DEFAULTS))) };
@@ -59,9 +102,12 @@ const shareServer = $('shareServer');
 shareKey.value = local.shareKey ?? '';
 shareServer.value = local.shareServer ?? '';
 shareServer.placeholder = SHARE_SERVER;
+// Spine for iPhone needs the share server, so it shows only with a share key.
+$('iphone').hidden = !shareKey.value.trim();
 shareKey.addEventListener('input', () => {
   chrome.storage.local.set({ shareKey: shareKey.value.trim() });
   $('share-result').textContent = '';
+  $('iphone').hidden = !shareKey.value.trim();
 });
 shareServer.addEventListener('change', () => chrome.storage.local.set({ shareServer: shareServer.value.trim() }));
 $('share-test').addEventListener('click', async () => {

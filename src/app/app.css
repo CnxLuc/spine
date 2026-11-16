@@ -1,0 +1,334 @@
+/* Spine for iPhone, around the reader: the library, the sheets and connecting.
+   The reader keeps its own look; this matches it, in Spine's paper and dusk. */
+:root {
+  --bg: #f0eee6;
+  --raised: #fdfcf9;
+  --ink: #1f1e1d;
+  --ink-2: #5e5d59;
+  --ink-3: #8b8982;
+  --ink-4: #b9b6ad;
+  --line: #dcd9cf;
+  --accent: #2e637a;
+  --danger: #b4441c;
+  --chip: color-mix(in srgb, var(--ink) 6%, transparent);
+  --shadow: rgb(31 30 29 / 0.13);
+  --scrim: rgb(31 30 29 / 0.32);
+  --font-text: 'Spine Newsreader', Newsreader, Charter, 'Iowan Old Style', Georgia, serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, 'Segoe UI', system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1f1e1d;
+    --raised: #302f2c;
+    --ink: #efede5;
+    --ink-2: #b0aea5;
+    --ink-3: #807e77;
+    --ink-4: #57554f;
+    --line: #3a3936;
+    --accent: #add6e8;
+    --danger: #f0a07a;
+    --shadow: rgb(0 0 0 / 0.5);
+    --scrim: rgb(0 0 0 / 0.5);
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+  background: var(--bg);
+}
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.45 var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+#app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px)) calc(40px + env(safe-area-inset-bottom, 0px))
+    max(20px, env(safe-area-inset-left, 0px));
+}
+
+button {
+  cursor: pointer;
+}
+.primary,
+.ghost {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 12px;
+  font-weight: 600;
+}
+.primary {
+  background: var(--ink);
+  color: var(--bg);
+}
+.ghost {
+  background: var(--chip);
+}
+.wide {
+  width: 100%;
+}
+button:disabled,
+input:disabled {
+  opacity: 0.5;
+}
+
+/* Connecting */
+.connect {
+  display: grid;
+  gap: 18px;
+  padding-top: 8vh;
+}
+.connect-title,
+.brand {
+  margin: 0;
+  font-family: var(--font-text);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.connect-title {
+  font-size: 44px;
+  line-height: 1.05;
+}
+.lede {
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: 20px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.steps {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 6px;
+  padding-left: 1.4em;
+  font-size: 16px;
+}
+.paste-box {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--raised);
+  font: 13px/1.4 ui-monospace, 'SF Mono', Menlo, monospace;
+  resize: none;
+}
+.status {
+  min-height: 1.4em;
+  margin: 0;
+  font-size: 15px;
+  color: var(--ink-2);
+}
+.status.ok {
+  color: var(--accent);
+}
+.status.fail {
+  color: var(--danger);
+}
+
+/* The library */
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 -4px 8px;
+  padding: 8px 4px;
+  background: var(--bg);
+}
+.brand {
+  flex: 1;
+  font-size: 34px;
+  line-height: 1.1;
+}
+.icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+}
+.icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.hint {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--chip);
+  font-size: 15px;
+  color: var(--ink-2);
+}
+.empty {
+  padding: 18vh 8px 0;
+  text-align: center;
+  color: var(--ink-2);
+}
+.empty-title {
+  margin: 0 0 6px;
+  font-family: var(--font-text);
+  font-size: 24px;
+  color: var(--ink);
+}
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  display: flex;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--line);
+}
+.row-open {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 16px 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.row-site {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.row-site img {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+.row-title {
+  font-family: var(--font-text);
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.22;
+  text-wrap: balance;
+}
+.row-facts {
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.row-more {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 12px -10px 0 4px;
+  border: 0;
+  background: none;
+}
+.row-more svg {
+  width: 20px;
+  height: 20px;
+  fill: var(--ink-3);
+}
+
+/* Sheets */
+.sheet {
+  width: 100%;
+  max-width: 560px;
+  max-height: 90dvh;
+  margin: auto auto 0;
+  padding: 0;
+  border: 0;
+  border-radius: 20px 20px 0 0;
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow: 0 -10px 40px var(--shadow);
+}
+.sheet::backdrop {
+  background: var(--scrim);
+}
+.sheet-body {
+  display: grid;
+  gap: 12px;
+  padding: 20px max(20px, env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
+}
+.sheet h2 {
+  margin: 0 0 4px;
+  font-family: var(--font-text);
+  font-size: 24px;
+  font-weight: 600;
+}
+.sheet h2.clip {
+  font-size: 19px;
+  line-height: 1.3;
+}
+.add-form {
+  display: grid;
+  gap: 12px;
+}
+.link {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  font-size: 17px;
+}
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--chip);
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+.action.danger {
+  color: var(--danger);
+}
+.fact {
+  margin: 0;
+  font-size: 15px;
+  color: var(--ink-2);
+}

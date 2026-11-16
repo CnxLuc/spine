@@ -85,6 +85,19 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       error => reply({ started: false, message: error.message }),
     );
     return true;
+  } else if (message?.type === 'spine:phone-sign-in') {
+    // Signing in for the reader's iPhone, only from Spine's own settings: the
+    // answer, 'spine:phone-connected', carries the phone's tokens.
+    if (!sender.url?.startsWith(chrome.runtime.getURL(''))) {
+      reply({ started: false, message: 'Sign in for your iPhone from Spine’s settings.' });
+      return false;
+    }
+    const from = sender.tab ? { tabId: sender.tab.id, windowId: sender.tab.windowId } : null;
+    chatgpt.signIn(from, { forPhone: true }).then(
+      () => reply({ started: true }),
+      error => reply({ started: false, message: error.message }),
+    );
+    return true;
   } else if (message?.type === 'spine:sign-out') {
     chatgpt.signOut().then(() => reply({ ok: true }));
     return true;

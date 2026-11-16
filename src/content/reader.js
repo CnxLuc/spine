@@ -64,7 +64,7 @@ const el = (tag, className, text) => {
 // A block as HTML for a share link. Text that sits in neighbouring text nodes
 // stays apart, with an empty comment between, because the reader wraps
 // sentences node by node and a shared page should wrap them the same way.
-function snapshotOf(block) {
+export function snapshotOf(block) {
   const copy = block.cloneNode(true);
   const walker = document.createTreeWalker(copy, NodeFilter.SHOW_TEXT);
   const joined = [];
@@ -75,8 +75,10 @@ function snapshotOf(block) {
 
 export class Reader {
   // shared: what a share link carries, for a reader on a shared page.
-  constructor({ shared = null } = {}) {
+  // onClose: what happens after closing, for a reader that is the whole app.
+  constructor({ shared = null, onClose = null } = {}) {
     this.shared = shared;
+    this.onClose = onClose;
     this.layer = new Layer();
     this.root = this.layer.root;
     this.root.classList.toggle('shared', Boolean(shared));
@@ -132,17 +134,32 @@ export class Reader {
         this.layer.show();
         return;
       }
-      this.mount(extracted);
-      this.layer.show();
-      this.refreshShare();
-      await this.restorePosition();
-      this.analysis = new Analysis(this);
-      if (this.settings.autoRead) this.analysis.start();
-      else this.setAI('paused');
+      await this.begin(extracted);
       return;
     }
     this.layer.show();
     this.refreshShare();
+  }
+
+  // An article found somewhere other than this page, such as a page Spine's
+  // iPhone app fetched: laid out and read the same way.
+  async openFound(extracted) {
+    this.settings ??= await loadSettings();
+    this.applyAppearance();
+    this.layer.reveal();
+    this.teardown();
+    this.href = extracted.meta.url;
+    await this.begin(extracted);
+  }
+
+  async begin(extracted) {
+    this.mount(extracted);
+    this.layer.show();
+    this.refreshShare();
+    await this.restorePosition();
+    this.analysis = new Analysis(this);
+    if (this.settings.autoRead) this.analysis.start();
+    else this.setAI('paused');
   }
 
   // A shared page: the article and its notes come with the link, so nothing is
@@ -180,6 +197,7 @@ export class Reader {
     this.savePositionNow();
     this.setXray(false);
     this.layer.hide();
+    this.onClose?.();
   }
 
   // Leaves the page entirely, for a newer version of Spine to take over.

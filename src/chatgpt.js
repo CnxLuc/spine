@@ -51,11 +51,18 @@ async function save(record) {
     done.onerror = () => reject(done.error);
   });
 }
-// Signing out keeps this browser's host id and the client OpenAI issued, so
-// signing in again doesn't register Spine a second time.
+// Signing out keeps this browser's host id and the client OpenAI issued, and
+// the same for the reader's iPhone, so signing in again doesn't register Spine
+// a second time.
 async function forget() {
-  const { hostId, clientId, email } = await load();
-  await save({ hostId, clientId, email });
+  const { hostId, clientId, email, phone } = await load();
+  await save({ hostId, clientId, email, phone });
+}
+
+// A sign-in made on the reader's computer for this device, Spine for iPhone,
+// kept as this device's own: from here on it renews itself.
+export async function adopt({ hostId, clientId, subject, email, name, idToken, accessToken, refreshToken, expiresAt, scopes }) {
+  await save({ hostId, clientId, subject, email, name, idToken, accessToken, refreshToken, expiresAt, scopes, models: null });
 }
 
 export async function status() {
@@ -77,22 +84,32 @@ const challenge = async verifier =>
 let pending = null;
 
 // Opens OpenAI's sign-in in a small window over from, the tab or page that
-// asked. The outcome arrives later as a 'spine:connected' message.
-export async function signIn(from) {
+// asked. The outcome arrives later as a 'spine:connected' message. forPhone
+// signs in for the reader's iPhone instead, which can't finish a sign-in
+// itself: the outcome arrives as 'spine:phone-connected', carrying a sign-in
+// for the phone alone, and this browser keeps none of its tokens.
+export async function signIn(from, { forPhone = false } = {}) {
   if (pending) finish(pending, { error: failure('restarted', 'Signing in started again.') });
   const { issuer } = await where();
   const record = await load();
-  // One stable id for this browser, chosen before its first sign-in.
+  // One stable id for this browser, chosen before its first sign-in, and one
+  // for the iPhone it signs in for.
   if (!record.hostId) await save({ ...record, hostId: `urn:uuid:${crypto.randomUUID()}` });
-  const { hostId, clientId = DYNAMIC_CLIENT, idToken, email } = await load();
+  if (forPhone && !record.phone?.hostId) {
+    await save({ ...(await load()), phone: { hostId: `urn:uuid:${crypto.randomUUID()}`, clientId: DYNAMIC_CLIENT } });
+  }
+  const saved = await load();
+  // The phone has a client of its own, so its id token can't stand for it.
+  const { hostId, clientId = DYNAMIC_CLIENT, idToken = null } = forPhone ? saved.phone : saved;
+  const email = saved.email;
   // Only the port may change between sign-ins; a random one is unlikely to
   // belong to anything else on this computer.
   const redirect = `http://127.0.0.1:${20000 + Math.floor(Math.random() * 40000)}/auth/callback`;
-  const attempt = { state: random(), nonce: random(), verifier: random(), redirect, clientId, from };
+  const attempt = { state: random(), nonce: random(), verifier: random(), redirect, clientId, hostId, from, forPhone };
   const url = new URL(`${issuer}/api/accounts/authorize`);
   const params = {
     client_id: clientId,
-    ...(clientId === DYNAMIC_CLIENT && { agent_name_hint: NAME }),
+    ...(clientId === DYNAMIC_CLIENT && { agent_name_hint: forPhone ? `${NAME} for iPhone` : NAME }),
     ext_agent_host_id: hostId,
     ...(idToken && { id_token_hint: idToken }),
     ...(email && { login_hint: email }),
@@ -163,15 +180,23 @@ async function finish(attempt, { url, tabId, error }) {
   let outcome;
   try {
     if (error) throw error;
-    await complete(attempt, new URL(url));
-    // Signing in is choosing ChatGPT to read.
-    await chrome.storage.local.set({ engine: 'chatgpt' });
-    outcome = { ok: true };
+    const signedIn = await complete(attempt, new URL(url));
+    if (attempt.forPhone) outcome = { ok: true, session: signedIn };
+    else {
+      // Signing in is choosing ChatGPT to read.
+      await chrome.storage.local.set({ engine: 'chatgpt' });
+      outcome = { ok: true };
+    }
   } catch (problem) {
     if (problem.code !== 'restarted') console.warn('Spine ChatGPT sign-in', problem);
     outcome = { ok: false, code: problem.code ?? 'failed', message: problem.message };
   }
   if (outcome.code === 'restarted') return;
+  if (attempt.forPhone) {
+    // Only Spine's own pages hear this one: it carries the phone's tokens.
+    chrome.runtime.sendMessage({ type: 'spine:phone-connected', ...outcome }).catch(() => {});
+    return;
+  }
   // Back to where the reader started, which picks up from here.
   const message = { type: 'spine:connected', engine: 'chatgpt', ...outcome };
   const from = attempt.from;
@@ -209,16 +234,22 @@ async function complete(attempt, url) {
   if (!String(tokens.scope ?? '').split(' ').includes(PLAN_SCOPE)) {
     throw failure('plan', 'ChatGPT didn’t allow Spine to use your plan.');
   }
-  await save({
-    ...(await load()),
+  const signedIn = {
     clientId,
     subject: claims.sub,
     email: claims.email ?? '',
     name: claims.name ?? '',
     idToken: tokens.id_token,
     ...session(tokens),
-    models: null,
-  });
+  };
+  if (attempt.forPhone) {
+    // This browser keeps the phone's registration, so signing in for it again
+    // doesn't register Spine for iPhone twice, but none of its tokens.
+    await save({ ...(await load()), phone: { hostId: attempt.hostId, clientId } });
+    return { ...signedIn, hostId: attempt.hostId };
+  }
+  await save({ ...(await load()), ...signedIn, models: null });
+  return signedIn;
 }
 
 // The ID token comes straight from OpenAI's token endpoint over TLS, so its
@@ -312,13 +343,22 @@ export async function signOut() {
 /* Models and reading */
 
 // The models the reader's plan offers, in OpenAI's order, checked once a day.
+// A sign-in OpenAI turns down even once renewed is a 'chatgpt-signin' failure,
+// so the reader is asked to sign in again rather than told there's no model.
 export async function models({ fresh = false } = {}) {
   const record = await load();
   if (!fresh && record.models?.length && Date.now() - record.modelsAt < 24 * 60 * 60 * 1000) return record.models;
-  const access = await token();
+  let access = await token();
   if (!access) return [];
   const { api } = await where();
-  const response = await fetch(`${api}/models`, { headers: { Authorization: `Bearer ${access}` } });
+  const ask = () => fetch(`${api}/models`, { headers: { Authorization: `Bearer ${access}` } });
+  let response = await ask();
+  if (response.status === 401) {
+    access = await token({ force: true });
+    if (!access) throw failure('chatgpt-signin', 'Sign in to ChatGPT again to keep reading.');
+    response = await ask();
+  }
+  if (response.status === 401) throw failure('chatgpt-signin', 'Sign in to ChatGPT again to keep reading.');
   if (!response.ok) return record.models ?? [];
   const data = await response.json();
   const list = (data.models ?? [])
@@ -339,7 +379,15 @@ export async function read(port, signal, { request, system, user, schema, effort
   try {
     let access = await token();
     if (!access) return relay({ type: 'error', ...explain(401) });
-    const list = await models();
+    let list;
+    try {
+      list = await models();
+    } catch (error) {
+      if (error.code === 'chatgpt-signin') return relay({ type: 'error', ...explain(401) });
+      throw error;
+    }
+    // Renewing for the models may have replaced the access token.
+    access = (await token()) ?? access;
     const model = list.find(entry => entry.slug === wanted) ?? list[0];
     if (!model) return relay({ type: 'error', code: 'chatgpt', message: 'ChatGPT offered no model for your plan. Try again later.' });
     const { api } = await where();

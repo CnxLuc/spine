@@ -58,6 +58,19 @@ Shared pages credit the author, link to the original and ask search engines not 
 
 Share links are personal for now. They need a key for Spine’s share server, which you add in Spine’s settings, under Advanced. To run your own, read [how the share server works](share/README.md).
 
+## Read on your iPhone
+
+Spine for iPhone is a web app you add to your home screen. It keeps a library of articles, opens each one in Spine’s reader with the 4 lenses, and reads them on your ChatGPT plan. On a phone, Skim keeps the key sentences in view without scrolling.
+
+1. On your iPhone, open [read-with-spine.vercel.app/app](https://read-with-spine.vercel.app/app/) in Safari. Select Share, then Add to Home Screen.
+2. Open Spine from your home screen. Safari and the home-screen app keep separate data, so connect it there.
+3. On your computer, open Spine’s settings and find Spine on your iPhone. Select Sign in for your iPhone, then Copy for your iPhone.
+4. On your iPhone, select Paste from your Mac.
+
+OpenAI only lets Sign in with ChatGPT finish on a computer, so Spine on your computer signs in on your phone’s behalf. The phone gets a sign-in of its own. It renews itself and talks to OpenAI directly, so the sign-in never passes through Spine’s server. Your computer keeps none of its tokens.
+
+To read an article, copy its link, then select Add. Spine’s server fetches the page, because a web app can’t fetch other sites itself. The phone needs your share key for that, and Copy for your iPhone includes it. Pages you can only read signed in come through as a stranger sees them.
+
 ## Keyboard shortcuts
 
 | Keys | What they do |
@@ -162,6 +175,7 @@ node --test test/windows.test.mjs      # the Windows connector and its command (
 node test/welcome-check.mjs            # the page Spine opens when it's installed
 node test/local-check.mjs              # Spine finding Claude Code and Codex
 node test/onboard.mjs                  # the first-run card and ChatGPT sign-in, against a stand-in for OpenAI
+node test/app-check.mjs                # Spine for iPhone, from signing in for it to reading, against a stand-in for OpenAI
 node test/tour.mjs <url> [name]        # each lens, panel and theme, as screenshots
 node test/interact.mjs                 # keyboard, hover, rail and resume checks
 node test/extras.mjs                   # narrow window, lightbox and copying
@@ -184,6 +198,8 @@ Never load `.test-build/` in your own browser: it can open Spine on any page wit
 | `src/content/styles.css` | Every colour, font and timing |
 | `src/chatgpt.js` | Sign in with ChatGPT, and reading on a ChatGPT plan |
 | `src/content/onboard.js` | The card that asks who reads, the first time |
+| `src/app/main.js` | Spine for iPhone: the library, adding a link and connecting |
+| `src/app/shim.js` | What the background worker does, done in the page for Spine for iPhone |
 | `native/spine-host.sh` | The connector your browser starts to run Claude Code or Codex, in plain bash |
 | `native/SpineHost.cs` | The same connector for Windows, which Windows’ own compiler builds on the reader’s computer |
 | `src/local.js` | What Spine asks the connector, and how it reads what Claude Code and Codex print |

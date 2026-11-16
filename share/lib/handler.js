@@ -10,7 +10,8 @@
 //   GET    /<id>              the shared article, as a page
 //
 // store keeps the shares: get, create (never over another), put and delete.
-import { randomInt, timingSafeEqual } from 'node:crypto';
+import { randomInt } from 'node:crypto';
+import { authorized } from './key.js';
 import { missing, page } from './page.js';
 
 // Ids leave out characters that look alike, so a link copied by hand still works.
@@ -46,12 +47,6 @@ const PAGE_HEADERS = {
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { ...CORS, 'cache-control': 'no-store' } });
 const newId = () => Array.from({ length: 8 }, () => ALPHABET[randomInt(ALPHABET.length)]).join('');
-
-function authorized(request, key) {
-  const given = Buffer.from((request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, ''));
-  const wanted = Buffer.from(key ?? '');
-  return wanted.length >= 16 && given.length === wanted.length && timingSafeEqual(given, wanted);
-}
 
 // What a share must hold for a page to show it. The page checks every block
 // again as it builds the article.
