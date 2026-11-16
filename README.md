@@ -28,7 +28,7 @@ Spine opens straight away with the article as plain, readable text. ChatGPT or C
 The dock at the bottom has 4 lenses, each with its reading time:
 
 - Read shows everything, as written
-- Skim shows everything, but while you scroll the key sentences stay and the rest fades to a quarter; it comes back when you stop
+- Skim shows everything, but while you scroll the key sentences stay and the rest fades to a quarter; it comes back when you stop. On a phone, where there’s no ⌥ to hold, the fade stays on until you leave Skim, and a tap on a faded paragraph brings it back
 - Supercut keeps only the key sentences and folds the rest into small pills, each with a short line in the author’s voice; rest on a pill to open it, click to pin it open
 - Outline folds each long section under a 1 to 3 sentence note; click a note to open its section
 

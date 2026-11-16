@@ -754,7 +754,8 @@ svg.icon {
 /* Skim. While you scroll, everything but the key sentences fades to a quarter
    and the key sentences take the accent color; once scrolling rests, the text
    holds a moment, then everything eases back. Hold ⌥ to see it without
-   scrolling. */
+   scrolling. A phone has no ⌥, so there Skim stays faded, and a tapped
+   paragraph comes back to read in full. */
 .spine.has-keys.fades .tb {
   transition: color var(--fade-in) ease var(--fade-hold);
 }
@@ -775,6 +776,14 @@ svg.icon {
 }
 .spine.has-keys.skimming .tb a:has(.k) {
   text-decoration-color: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+.spine.has-keys.skimming .tb.lit {
+  color: var(--ink);
+  transition: color 0.25s ease;
+}
+/* A tap in the article reads as a tap on words, not a grey flash over it. */
+.scroller {
+  -webkit-tap-highlight-color: transparent;
 }
 /* Changing theme or type shouldn't wait on the reading fades. */
 .spine.restyling *,

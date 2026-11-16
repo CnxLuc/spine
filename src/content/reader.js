@@ -91,10 +91,14 @@ export class Reader {
     this.lists = null;
     this.ai = { state: 'idle' };
     this.xray = false;
+    // A phone or tablet has no ⌥ to hold, so there Skim keeps the fade on.
+    this.touch = matchMedia('(hover: none) and (pointer: coarse)');
+    this.touch.addEventListener('change', () => this.updateSkim());
     this.systemDark = matchMedia('(prefers-color-scheme: dark)');
     this.systemDark.addEventListener('change', () => this.applyAppearance());
 
     const layer = this.layer;
+    layer.scroller.addEventListener('click', event => this.lightParagraph(event));
     layer.on('close', () => this.close());
     layer.on('key', event => this.onKey(event));
     layer.on('keyup', event => {
@@ -392,6 +396,7 @@ export class Reader {
     this.hover?.close();
     this.lens = lens;
     this.root.dataset.lens = lens;
+    for (const block of this.article?.root.querySelectorAll('.tb.lit') ?? []) block.classList.remove('lit');
     if (lens === 'outline') this.outline?.foldAll();
     for (const [id, button] of Object.entries(this.lensButtons)) {
       button.setAttribute('aria-checked', String(id === lens));
@@ -412,18 +417,31 @@ export class Reader {
     if (next && !this.lensButtons[next.id].classList.contains('unavailable')) this.setLens(next.id);
   }
 
-  // Skimming: the fades and the accent color, while you scroll or hold ⌥.
+  // Skimming: the fades and the accent color, while you scroll or hold ⌥. On a
+  // phone, where there's no ⌥, Skim keeps them on until you leave it.
   updateSkim() {
     const hasKeys = this.keys.size > 0;
     const lensFades = this.lens === 'skim' || this.lens === 'outline';
+    const stays = this.lens === 'skim' && Boolean(this.touch?.matches);
     const fades = hasKeys && (lensFades || this.xray);
     this.root.classList.toggle('has-keys', hasKeys);
     this.root.classList.toggle('fades', fades);
     this.root.classList.toggle(
       'skimming',
-      Boolean(fades && ((lensFades && this.layer.scrolling) || this.xray)),
+      Boolean(fades && ((lensFades && (this.layer.scrolling || stays)) || this.xray)),
     );
     this.root.classList.toggle('emphasis', Boolean(this.settings?.emphasis && (lensFades || this.xray)));
+  }
+
+  // On a phone in Skim, a tap on a faded paragraph brings it back to read in
+  // full while the rest stays faded; another tap fades it again. Links,
+  // pictures and buttons keep their own taps.
+  lightParagraph(event) {
+    if (this.lens !== 'skim' || !this.touch.matches || !this.root.classList.contains('skimming')) return;
+    const target = event.target;
+    if (target.closest?.('a, button, img, video, input, .pill, [role="button"]')) return;
+    const block = target.closest?.('.tb');
+    if (block && this.article?.root.contains(block)) block.classList.toggle('lit');
   }
 
   setXray(on) {
@@ -1235,7 +1253,8 @@ export class Reader {
       this.switchRow('Outline beside the text', 'On wide screens. Press O', 'rail'),
     );
     const hint = el('p', 'kbd-hint');
-    hint.innerHTML = 'Hold <kbd>⌥</kbd> to see the key sentences without scrolling. Press <kbd>?</kbd> for all shortcuts.';
+    if (this.touch.matches) hint.textContent = 'In Skim, the key sentences stay while the rest fades. Tap a faded paragraph to read it.';
+    else hint.innerHTML = 'Hold <kbd>⌥</kbd> to see the key sentences without scrolling. Press <kbd>?</kbd> for all shortcuts.';
     ideas.append(hint);
     panel.append(head, ideas);
   }

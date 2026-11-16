@@ -259,7 +259,85 @@ for (const [engine, browser] of [['chromium', viewer], ['webkit', await webkit.l
     await shot(page, `share-phone-${engine}-menu`);
     await phone.close();
   });
+
+  // A phone has no ⌥, so Skim keeps the fade on at rest, and a tap brings one
+  // faded paragraph back to read in full.
+  await check(`on a phone (${engine}), Skim keeps the key sentences without scrolling, and a tap brings a paragraph back`, async () => {
+    const phone = await browser.newContext({ ...devices['iPhone 14'] });
+    const page = await phone.newPage();
+    await page.goto(shared.graham);
+    await ready(page);
+    assert.ok(await page.evaluate(() => matchMedia('(hover: none) and (pointer: coarse)').matches), 'the browser counts as a phone');
+    await page.locator('.lens button[data-lens="skim"]').tap();
+    // Longer than Skim's hold and ease back after a scroll.
+    const settle = () => page.waitForTimeout(2600);
+    const skimming = () => reader(page, shadow => shadow.querySelector('.spine').classList.contains('skimming'));
+    await settle();
+    assert.ok(await skimming(), 'the fade stays on without scrolling');
+    await page.locator('.scroller').evaluate(element => element.scrollBy(0, 500));
+    await settle();
+    assert.ok(await skimming(), 'and stays on after a scroll comes to rest');
+    // A paragraph on screen with a sentence that isn't key.
+    const found = await reader(page, shadow => {
+      const box = shadow.querySelector('.scroller').getBoundingClientRect();
+      const paragraph = [...shadow.querySelectorAll('.tb')].find(p => {
+        const top = p.getBoundingClientRect().top;
+        return p.querySelector('.s:not(.k)') && !p.querySelector('a') && top > box.top + 90 && top < box.bottom - 280;
+      });
+      if (paragraph) paragraph.dataset.probe = 'faded';
+      return Boolean(paragraph);
+    });
+    assert.ok(found, 'a faded paragraph on screen');
+    const alpha = color => Number(color.match(/(?:\/|rgba\([^)]*,)\s*([\d.]+)\)$/)?.[1] ?? 1);
+    const look = () =>
+      reader(page, shadow => {
+        const paragraph = shadow.querySelector('[data-probe="faded"]');
+        const other = [...shadow.querySelectorAll('.tb:not([data-probe])')].find(p => p.querySelector('.s:not(.k)'));
+        return { lit: paragraph.classList.contains('lit'), color: getComputedStyle(paragraph).color, other: getComputedStyle(other).color };
+      });
+    assert.ok(alpha((await look()).color) < 0.5, 'the paragraph starts faded');
+    await page.locator('[data-probe="faded"]').tap({ position: { x: 6, y: 8 } });
+    await page.waitForTimeout(500);
+    let seen = await look();
+    assert.ok(seen.lit && alpha(seen.color) === 1, `a tap brings it back (${seen.color})`);
+    assert.ok(alpha(seen.other) < 0.5, 'the rest stays faded');
+    await shot(page, `share-phone-${engine}-skim-tap`);
+    await page.locator('[data-probe="faded"]').tap({ position: { x: 6, y: 8 } });
+    await page.waitForTimeout(700);
+    seen = await look();
+    assert.ok(!seen.lit && alpha(seen.color) < 0.5, 'a second tap fades it again');
+    await page.locator('[data-probe="faded"]').tap({ position: { x: 6, y: 8 } });
+    await reach(page);
+    await page.locator('.lens button[data-lens="read"]').tap();
+    await page.waitForTimeout(400);
+    assert.equal(await reader(page, shadow => shadow.querySelectorAll('.tb.lit').length), 0, 'Read clears it');
+    assert.equal(await skimming(), false, 'and reads normally');
+    await phone.close();
+  });
 }
+
+// A computer keeps Skim as it was: the fade comes with scrolling, and ⌥.
+await check('on a computer, Skim still fades only while you scroll', async () => {
+  const page = await desk.newPage();
+  await page.goto(shared.graham);
+  await ready(page);
+  await page.keyboard.press('2');
+  assert.equal(await reader(page, shadow => shadow.querySelector('.spine').dataset.lens), 'skim');
+  // Scroll a frame at a time and look while it moves.
+  const moving = await reader(page, async shadow => {
+    const scroller = shadow.querySelector('.scroller');
+    for (let step = 0; step < 8; step++) {
+      scroller.scrollBy(0, 40);
+      await new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)));
+    }
+    return shadow.querySelector('.spine').classList.contains('skimming');
+  });
+  assert.ok(moving, 'fades while scrolling');
+  await page.waitForTimeout(2600);
+  const skimming = await reader(page, shadow => shadow.querySelector('.spine').classList.contains('skimming'));
+  assert.equal(skimming, false, 'and comes back at rest');
+  await page.close();
+});
 
 // Settings stay with whoever reads, in their browser.
 await check('a reader’s theme stays on the shared page when it opens again', async () => {
